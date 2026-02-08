@@ -32,6 +32,7 @@ from tenacity import (
 )
 
 from .base import BaseFetcher, DataFetchError, RateLimitError, STANDARD_COLUMNS
+from .realtime_types import UnifiedRealtimeQuote
 from src.config import get_config
 import os
 
@@ -451,7 +452,7 @@ class TushareFetcher(BaseFetcher):
         
         return None
     
-    def get_realtime_quote(self, stock_code: str) -> Optional['UnifiedRealtimeQuote']:
+    def get_realtime_quote(self, stock_code: str) -> Optional[UnifiedRealtimeQuote]:
         """
         获取实时行情
 
@@ -469,7 +470,7 @@ class TushareFetcher(BaseFetcher):
             return None
 
         from .realtime_types import (
-            UnifiedRealtimeQuote, RealtimeSource,
+            RealtimeSource,
             safe_float, safe_int
         )
 
