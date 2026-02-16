@@ -579,10 +579,15 @@ class GeminiAnalyzer:
             if config.openai_base_url and config.openai_base_url.startswith('http'):
                 client_kwargs["base_url"] = config.openai_base_url
 
+            # 配置 SSL 证书校验 (httpx Client)
+            import httpx
+            http_client = httpx.Client(verify=config.openai_verify_ssl)
+            client_kwargs["http_client"] = http_client
+
             self._openai_client = OpenAI(**client_kwargs)
             self._current_model_name = config.openai_model
             self._use_openai = True
-            logger.info(f"OpenAI 兼容 API 初始化成功 (base_url: {config.openai_base_url}, model: {config.openai_model})")
+            logger.info(f"OpenAI 兼容 API 初始化成功 (base_url: {config.openai_base_url}, model: {config.openai_model}, verify_ssl: {config.openai_verify_ssl})")
         except ImportError as e:
             # 依赖缺失（如 socksio）
             if 'socksio' in str(e).lower() or 'socks' in str(e).lower():

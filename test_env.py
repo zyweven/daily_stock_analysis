@@ -20,8 +20,7 @@ A股自选股智能分析系统 - 环境验证测试
 
 """
 import os
-os.environ["http_proxy"] = "http://127.0.0.1:10809"
-os.environ["https_proxy"] = "http://127.0.0.1:10809"
+
 
 import argparse
 import logging
@@ -317,12 +316,20 @@ def test_notification():
     service = NotificationService()
     
     print_section("配置检查")
-    if service.is_available():
+    has_config = False
+    
+    if config.wechat_webhook_url:
         print(f"  ✓ 企业微信 Webhook 已配置")
-        webhook_preview = config.wechat_webhook_url[:50] + "..." if len(config.wechat_webhook_url) > 50 else config.wechat_webhook_url
+        has_config = True
+    
+    if config.feishu_webhook_url:
+        print(f"  ✓ 飞书 Webhook 已配置")
+        webhook_preview = config.feishu_webhook_url[:50] + "..." if len(config.feishu_webhook_url) > 50 else config.feishu_webhook_url
         print(f"    URL: {webhook_preview}")
-    else:
-        print(f"  ✗ 企业微信 Webhook 未配置")
+        has_config = True
+        
+    if not has_config:
+        print(f"  ✗ 未配置任何通知渠道")
         return False
     
     print_section("发送测试消息")
@@ -332,20 +339,33 @@ def test_notification():
 这是一条来自 **A股自选股智能分析系统** 的测试消息。
 
 - 测试时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- 测试目的: 验证企业微信 Webhook 配置
+- 测试目的: 验证通知服务配置
 
 如果您收到此消息，说明通知功能配置正确 ✓"""
     
     print(f"  正在发送...")
     
+    print(f"  正在发送...")
+    
     try:
-        success = service.send_to_wechat(test_message)
+        success = False
+        # 根据配置调用对应的发送方法
+        if config.feishu_webhook_url:
+            print(f"  - 正在推送至飞书...")
+            if service.send_to_feishu(test_message):
+                print(f"  ✓ 飞书消息发送成功")
+                success = True
+            else:
+                print(f"  ✗ 飞书消息发送失败")
         
-        if success:
-            print(f"  ✓ 消息发送成功，请检查企业微信")
-        else:
-            print(f"  ✗ 消息发送失败")
-        
+        if config.wechat_webhook_url:
+            print(f"  - 正在推送至企业微信...")
+            if service.send_to_wechat(test_message):
+                print(f"  ✓ 企业微信消息发送成功")
+                success = True
+            else:
+                print(f"  ✗ 企业微信消息发送失败")
+                
         return success
         
     except Exception as e:
