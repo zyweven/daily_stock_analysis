@@ -77,6 +77,7 @@ class ModelResultResponse(BaseModel):
     confidence: Optional[str] = None
     elapsed_seconds: float = 0.0
     error: Optional[str] = None
+    raw_result: Optional[Dict[str, Any]] = None  # Include raw result
 
 
 class ExpertPanelResponse(BaseModel):
@@ -87,6 +88,7 @@ class ExpertPanelResponse(BaseModel):
     consensus_score: Optional[int] = Field(None, description="共识评分")
     consensus_advice: Optional[str] = Field(None, description="共识建议")
     consensus_summary: Optional[str] = Field(None, description="共识摘要")
+    consensus_strategy: Optional[Dict[str, Any]] = Field(None, description="共识策略点位")
     model_results: List[ModelResultResponse] = Field(..., description="各模型独立结果")
     created_at: str = Field(..., description="分析完成时间")
 
@@ -216,9 +218,11 @@ async def trigger_expert_panel(request: ExpertPanelRequest):
                     confidence=r.confidence,
                     elapsed_seconds=r.elapsed_seconds,
                     error=r.error,
+                    raw_result=r.raw_result,
                 )
                 for r in result.model_results
             ],
+            consensus_strategy=result.consensus_strategy,
             created_at=datetime.now().isoformat(),
         )
 

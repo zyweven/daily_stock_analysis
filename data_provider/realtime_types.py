@@ -115,6 +115,8 @@ class UnifiedRealtimeQuote:
     code: str
     name: str = ""
     source: RealtimeSource = RealtimeSource.FALLBACK
+    industry: Optional[str] = None  # 细分行业
+    area: Optional[str] = None      # 地区
     
     # === 核心价格数据（几乎所有源都有）===
     price: Optional[float] = None           # 最新价
@@ -158,7 +160,8 @@ class UnifiedRealtimeQuote:
             'volume_ratio', 'turnover_rate', 'amplitude',
             'open_price', 'high', 'low', 'pre_close',
             'pe_ratio', 'pb_ratio', 'total_mv', 'circ_mv',
-            'change_60d', 'high_52w', 'low_52w'
+            'change_60d', 'high_52w', 'low_52w',
+            'industry', 'area',
         ]
         for f in optional_fields:
             val = getattr(self, f, None)

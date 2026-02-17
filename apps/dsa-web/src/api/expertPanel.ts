@@ -29,6 +29,7 @@ export interface ModelResultItem {
     confidence: string | null;
     elapsedSeconds: number;
     error: string | null;
+    rawResult?: any; // Contains specific strategy data
 }
 
 export interface ExpertPanelResponse {
@@ -38,6 +39,7 @@ export interface ExpertPanelResponse {
     consensusScore: number | null;
     consensusAdvice: string | null;
     consensusSummary: string | null;
+    consensusStrategy?: any; // Aggregated strategy
     modelResults: ModelResultItem[];
     createdAt: string;
 }

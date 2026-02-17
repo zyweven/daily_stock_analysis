@@ -64,6 +64,7 @@ class ModelResult:
             "summary": self.summary,
             "confidence": self.confidence,
             "elapsed_seconds": round(self.elapsed_seconds, 2),
+            "raw_result": self.raw_result,  # Include raw result for detailed history
             "error": self.error,
         }
 
@@ -78,6 +79,7 @@ class ExpertPanelResult:
     consensus_score: Optional[int] = None
     consensus_advice: Optional[str] = None
     consensus_summary: Optional[str] = None
+    consensus_strategy: Optional[Dict[str, Any]] = None  # Aggregated component strategy
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -87,6 +89,7 @@ class ExpertPanelResult:
             "consensus_score": self.consensus_score,
             "consensus_advice": self.consensus_advice,
             "consensus_summary": self.consensus_summary,
+            "consensus_strategy": self.consensus_strategy,
             "model_results": [r.to_dict() for r in self.model_results],
         }
 
@@ -252,6 +255,7 @@ def _compute_consensus(results: List[ModelResult]) -> Dict[str, Any]:
             "score": None,
             "advice": "数据不足",
             "summary": "所有模型分析均失败，无法生成共识结论。",
+            "strategy": None,
         }
 
     # 平均评分
@@ -259,10 +263,35 @@ def _compute_consensus(results: List[ModelResult]) -> Dict[str, Any]:
 
     # 建议投票
     advice_counts: Dict[str, int] = {}
+    valid_strategies: List[Dict[str, Any]] = []
+
     for r in successful:
         if r.advice:
             advice_counts[r.advice] = advice_counts.get(r.advice, 0) + 1
+        
+        # Collect valid strategies from raw_result
+        if r.raw_result and r.raw_result.get("dashboard") and r.raw_result["dashboard"].get("battle_plan"):
+             strategies = r.raw_result["dashboard"]["battle_plan"].get("sniper_points")
+             if strategies:
+                 valid_strategies.append(strategies)
+
     top_advice = max(advice_counts, key=advice_counts.get) if advice_counts else "观望"
+
+    # 策略聚合 (Simple Strategy: Use the strategy from the first model that matches the top consensus advice)
+    # Future improvement: Calculate average price points
+    consensus_strategy = None
+    if valid_strategies:
+        # Try to find a strategy from a model that agrees with the consensus
+        matching_models = [r for r in successful if r.advice == top_advice and r.raw_result and r.raw_result.get("dashboard")]
+        if matching_models:
+             # Use the highest scoring model's strategy among those who agree
+             best_model = max(matching_models, key=lambda x: x.score or 0)
+             if best_model.raw_result:
+                 consensus_strategy = best_model.raw_result["dashboard"]["battle_plan"].get("sniper_points")
+        
+        # Fallback to the first available strategy if no matching model has one
+        if not consensus_strategy:
+            consensus_strategy = valid_strategies[0]
 
     # 生成共识摘要
     agree_count = advice_counts.get(top_advice, 0)
@@ -286,6 +315,7 @@ def _compute_consensus(results: List[ModelResult]) -> Dict[str, Any]:
         "score": avg_score,
         "advice": top_advice,
         "summary": summary,
+        "strategy": consensus_strategy,
     }
 
 
@@ -371,6 +401,7 @@ def run_expert_panel(
         consensus_score=consensus["score"],
         consensus_advice=consensus["advice"],
         consensus_summary=consensus["summary"],
+        consensus_strategy=consensus["strategy"],
     )
 
     logger.info(f"[专家会诊] 分析完成: {consensus['summary']}")

@@ -8,6 +8,8 @@ import type {
   PerformanceMetrics,
 } from '../types/backtest';
 
+import { GlobalStockSelector } from '../components/stock/GlobalStockSelector';
+
 // ============ Helpers ============
 
 function pct(value?: number | null): string {
@@ -231,14 +233,12 @@ const BacktestPage: React.FC = () => {
       <header className="flex-shrink-0 px-4 py-3 border-b border-white/5">
         <div className="flex items-center gap-2 max-w-4xl">
           <div className="flex-1 relative">
-            <input
-              type="text"
+            <GlobalStockSelector
               value={codeFilter}
-              onChange={(e) => setCodeFilter(e.target.value.toUpperCase())}
-              onKeyDown={handleKeyDown}
+              onChange={(code) => setCodeFilter(code.toUpperCase())}
               placeholder="输入股票代码 (留空查询所有)"
-              disabled={isRunning}
-              className="input-terminal w-full"
+              className="w-full"
+              onKeyDown={handleKeyDown}
             />
           </div>
           <button

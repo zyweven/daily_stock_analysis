@@ -36,6 +36,14 @@ from src.services.system_config_service import SystemConfigService
 async def app_lifespan(app: FastAPI):
     """Initialize and release shared services for the app lifecycle."""
     app.state.system_config_service = SystemConfigService()
+    
+    # Auto-sync legacy stock list from .env to DB
+    try:
+        from src.services.stock_manager import StockManageService
+        StockManageService().sync_from_env()
+    except Exception as e:
+        print(f"[WARNING] Failed to sync stock list: {e}")
+
     try:
         yield
     finally:

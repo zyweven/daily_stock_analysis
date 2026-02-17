@@ -75,6 +75,8 @@ class StockService:
                 "prev_close": getattr(quote, "pre_close", None),
                 "volume": getattr(quote, "volume", None),
                 "amount": getattr(quote, "amount", None),
+                "industry": getattr(quote, "industry", None),
+                "area": getattr(quote, "area", None),
                 "update_time": datetime.now().isoformat(),
             }
             

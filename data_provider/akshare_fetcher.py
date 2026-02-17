@@ -84,6 +84,13 @@ _etf_realtime_cache: Dict[str, Any] = {
     'ttl': 1200  # 20分钟缓存有效期
 }
 
+# 港股实时行情缓存 (全量)
+_hk_realtime_cache: Dict[str, Any] = {
+    'data': None,
+    'timestamp': 0,
+    'ttl': 1200  # 20分钟缓存有效期
+}
+
 
 def _is_etf_code(stock_code: str) -> bool:
     """
@@ -1142,22 +1149,34 @@ class AkshareFetcher(BaseFetcher):
         source_key = "akshare_hk"
         
         try:
-            # 防封禁策略
-            self._set_random_user_agent()
-            self._enforce_rate_limit()
+            # 检查缓存
+            current_time = time.time()
+            if (_hk_realtime_cache['data'] is not None and 
+                current_time - _hk_realtime_cache['timestamp'] < _hk_realtime_cache['ttl']):
+                df = _hk_realtime_cache['data']
+                logger.debug(f"[缓存命中] 使用缓存的港股实时行情数据")
+            else:
+                # 触发全量刷新
+                # 防封禁策略
+                self._set_random_user_agent()
+                self._enforce_rate_limit()
+                
+                logger.info(f"[API调用] ak.stock_hk_spot_em() 获取港股实时行情...")
+                import time as _time
+                api_start = _time.time()
+                
+                df = ak.stock_hk_spot_em()
+                
+                api_elapsed = _time.time() - api_start
+                logger.info(f"[API返回] ak.stock_hk_spot_em 成功: 返回 {len(df)} 只港股, 耗时 {api_elapsed:.2f}s")
+                circuit_breaker.record_success(source_key)
+
+                # 更新缓存
+                _hk_realtime_cache['data'] = df
+                _hk_realtime_cache['timestamp'] = current_time
             
             # 确保代码格式正确（5位数字）
             code = stock_code.lower().replace('hk', '').zfill(5)
-            
-            logger.info(f"[API调用] ak.stock_hk_spot_em() 获取港股实时行情...")
-            import time as _time
-            api_start = _time.time()
-            
-            df = ak.stock_hk_spot_em()
-            
-            api_elapsed = _time.time() - api_start
-            logger.info(f"[API返回] ak.stock_hk_spot_em 成功: 返回 {len(df)} 只港股, 耗时 {api_elapsed:.2f}s")
-            circuit_breaker.record_success(source_key)
             
             # 查找指定港股
             row = df[df['代码'] == code]
@@ -1187,6 +1206,9 @@ class AkshareFetcher(BaseFetcher):
                 circ_mv=safe_float(row.get('流通市值')),
                 high_52w=safe_float(row.get('52周最高')),
                 low_52w=safe_float(row.get('52周最低')),
+                # 尝试提取行业/地区（部分接口可能返回）
+                industry=str(row.get('行业', '')) or None,
+                area=str(row.get('地区', '')) or None,
             )
             
             logger.info(f"[港股实时行情] {stock_code} {quote.name}: 价格={quote.price}, 涨跌={quote.change_pct}%, "

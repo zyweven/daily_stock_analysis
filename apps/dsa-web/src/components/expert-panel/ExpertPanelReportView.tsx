@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { ExpertPanelResponse, ModelResultItem } from '../../api/expertPanel';
 import '../../pages/ExpertPanelPage.css'; // Reuse existing styles
+import { ReportStrategy } from '../report/ReportStrategy';
 
 // ============ Helper Functions ============
 
@@ -35,6 +36,12 @@ export const ConsensusCard: React.FC<{ result: ExpertPanelResponse }> = ({ resul
                     <p className="ep-consensus-summary">{result.consensusSummary}</p>
                 </div>
             </div>
+            {/* Consensus Strategy */}
+            {result.consensusStrategy && (
+                <div className="mt-4 border-t border-white/10 pt-4 px-4 pb-4">
+                    <ReportStrategy strategy={result.consensusStrategy} />
+                </div>
+            )}
         </div>
     );
 };
@@ -111,6 +118,12 @@ export const DetailTabs: React.FC<{ results: ModelResultItem[] }> = ({ results }
                     <span className="ep-detail-advice">建议: {current.advice}</span>
                 </div>
                 <div className="ep-detail-body">
+                    {/* Strategy Points */}
+                    {current.rawResult?.dashboard?.battle_plan?.sniper_points && (
+                        <div className="mb-6">
+                            <ReportStrategy strategy={current.rawResult.dashboard.battle_plan.sniper_points} />
+                        </div>
+                    )}
                     {current.summary ? (
                         <div style={{ whiteSpace: 'pre-wrap' }}>{current.summary}</div>
                     ) : (

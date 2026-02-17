@@ -3,6 +3,7 @@ import './ExpertPanelPage.css';
 import { expertPanelApi } from '../api/expertPanel';
 import type { ModelInfo, ExpertPanelResponse } from '../api/expertPanel';
 import { ExpertPanelReportView } from '../components/expert-panel/ExpertPanelReportView';
+import { GlobalStockSelector } from '../components/stock/GlobalStockSelector';
 
 // ============ 子组件 ============
 
@@ -115,14 +116,11 @@ const ExpertPanelPage: React.FC = () => {
             {/* 输入区域 */}
             <div className="ep-input-area">
                 <div className="ep-stock-input">
-                    <input
-                        id="ep-stock-code"
-                        type="text"
-                        placeholder="输入股票代码（如 600519）"
+                    <GlobalStockSelector
                         value={stockCode}
-                        onChange={(e) => setStockCode(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && !loading && handleAnalyze()}
-                        disabled={loading}
+                        onChange={(code) => setStockCode(code)}
+                        placeholder="输入股票代码（如 600519）"
+                        className="flex-1"
                     />
                     <button
                         className="ep-analyze-btn"
