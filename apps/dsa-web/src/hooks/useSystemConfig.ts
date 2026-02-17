@@ -83,6 +83,7 @@ export function useSystemConfig() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [retryAction, setRetryAction] = useState<RetryAction>(null);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
 
   const mergedItems = useMemo(() => {
     return sortItemsByOrder(
@@ -320,6 +321,21 @@ export function useSystemConfig() {
     setToast(null);
   }, []);
 
+  const fetchModels = useCallback(async (apiKey: string, baseUrl?: string): Promise<string[]> => {
+    setIsFetchingModels(true);
+    try {
+      const result = await systemConfigApi.fetchModels({ apiKey, baseUrl });
+      setToast({ type: 'success', message: `成功获取到 ${result.models.length} 个模型` });
+      return result.models;
+    } catch (error: unknown) {
+      const message = getReadableError(error, '获取模型列表失败');
+      setToast({ type: 'error', message });
+      return [];
+    } finally {
+      setIsFetchingModels(false);
+    }
+  }, []);
+
   return {
     // Server state
     configVersion,
@@ -339,6 +355,7 @@ export function useSystemConfig() {
     // Request state
     isLoading,
     isSaving,
+    isFetchingModels,
     loadError,
     saveError,
     retryAction,
@@ -349,5 +366,6 @@ export function useSystemConfig() {
     save,
     resetDraft,
     setDraftValue,
+    fetchModels,
   };
 }

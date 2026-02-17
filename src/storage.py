@@ -57,6 +57,23 @@ if TYPE_CHECKING:
 
 # === 数据模型定义 ===
 
+class SystemConfig(Base):
+    """
+    系统配置模型（混合配置系统）
+
+    当 CONFIG_STORAGE_TYPE=db 时，配置项将存储在此表中。
+    支持与 .env 相同的 key-value 结构。
+    """
+    __tablename__ = 'system_config'
+
+    key = Column(String(100), primary_key=True)
+    value = Column(Text, default='')
+    description = Column(String(500))  # 可选描述
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    def __repr__(self):
+        return f"<SystemConfig(key={self.key}, value={self.value[:30]}...)>"
+
 class StockDaily(Base):
     """
     股票日线数据模型
@@ -205,6 +222,11 @@ class AnalysisHistory(Base):
     news_content = Column(Text)
     context_snapshot = Column(Text)
 
+    # 多模型专家会诊详情（JSON 格式）
+    # 格式: {"gemini": {"score": 85, "advice": "买入", ...}, "deepseek": {...}}
+    model_details = Column(Text)  # JSON 存储各模型的独立分析结果
+    models_used = Column(String(200))  # 使用的模型列表，逗号分隔
+
     # 狙击点位（用于回测）
     ideal_buy = Column(Float)
     secondary_buy = Column(Float)
@@ -236,6 +258,8 @@ class AnalysisHistory(Base):
             'secondary_buy': self.secondary_buy,
             'stop_loss': self.stop_loss,
             'take_profit': self.take_profit,
+            'model_details': self.model_details,
+            'models_used': self.models_used,
             'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
@@ -1182,6 +1206,95 @@ class DatabaseManager:
         raw_key = f"{code}|{title}|{source}|{date_str}"
         digest = hashlib.md5(raw_key.encode("utf-8")).hexdigest()
         return f"no-url:{code}:{digest}"
+
+
+    # === SystemConfig CRUD ===
+
+    def get_system_config(self, key: str) -> Optional[str]:
+        """获取单个系统配置项的值"""
+        with self.get_session() as session:
+            record = session.execute(
+                select(SystemConfig).where(SystemConfig.key == key.upper())
+            ).scalar_one_or_none()
+            return record.value if record else None
+
+    def set_system_config(self, key: str, value: str, description: Optional[str] = None) -> None:
+        """设置系统配置项（存在则更新，不存在则插入）"""
+        with self.get_session() as session:
+            try:
+                existing = session.execute(
+                    select(SystemConfig).where(SystemConfig.key == key.upper())
+                ).scalar_one_or_none()
+                if existing:
+                    existing.value = value
+                    if description is not None:
+                        existing.description = description
+                    existing.updated_at = datetime.now()
+                else:
+                    record = SystemConfig(
+                        key=key.upper(),
+                        value=value,
+                        description=description,
+                        updated_at=datetime.now(),
+                    )
+                    session.add(record)
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                logger.error(f"设置系统配置失败 [{key}]: {e}")
+                raise
+
+    def get_all_system_configs(self) -> Dict[str, str]:
+        """获取所有系统配置项（返回 key-value 字典）"""
+        with self.get_session() as session:
+            results = session.execute(select(SystemConfig)).scalars().all()
+            return {r.key: r.value for r in results}
+
+    def delete_system_config(self, key: str) -> bool:
+        """删除系统配置项"""
+        with self.get_session() as session:
+            try:
+                record = session.execute(
+                    select(SystemConfig).where(SystemConfig.key == key.upper())
+                ).scalar_one_or_none()
+                if record:
+                    session.delete(record)
+                    session.commit()
+                    return True
+                return False
+            except Exception as e:
+                session.rollback()
+                logger.error(f"删除系统配置失败 [{key}]: {e}")
+                raise
+
+    def batch_set_system_configs(self, configs: Dict[str, str]) -> int:
+        """批量设置系统配置项"""
+        count = 0
+        with self.get_session() as session:
+            try:
+                for key, value in configs.items():
+                    existing = session.execute(
+                        select(SystemConfig).where(SystemConfig.key == key.upper())
+                    ).scalar_one_or_none()
+                    if existing:
+                        if existing.value != value:
+                            existing.value = value
+                            existing.updated_at = datetime.now()
+                            count += 1
+                    else:
+                        record = SystemConfig(
+                            key=key.upper(),
+                            value=value,
+                            updated_at=datetime.now(),
+                        )
+                        session.add(record)
+                        count += 1
+                session.commit()
+            except Exception as e:
+                session.rollback()
+                logger.error(f"批量设置系统配置失败: {e}")
+                raise
+        return count
 
 
 # 便捷函数

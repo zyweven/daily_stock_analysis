@@ -1,0 +1,412 @@
+/* ============================================
+   专家会诊页面样式 (Expert Panel)
+   ============================================ */
+
+.ep-page {
+  padding: 2rem 2.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.ep-header {
+  margin-bottom: 2rem;
+}
+
+.ep-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-primary, #e2e8f0);
+  margin: 0 0 0.25rem;
+}
+
+.ep-subtitle {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+/* --- 输入区域 --- */
+.ep-input-area {
+  background: var(--surface-card, rgba(30, 41, 59, 0.6));
+  border: 1px solid var(--border-default, rgba(100, 116, 139, 0.2));
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.ep-stock-input {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.ep-stock-input input {
+  flex: 1;
+  background: var(--surface-input, rgba(15, 23, 42, 0.5));
+  border: 1px solid var(--border-default, rgba(100, 116, 139, 0.3));
+  border-radius: 0.625rem;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  color: var(--text-primary, #e2e8f0);
+  transition: border-color 0.2s;
+}
+
+.ep-stock-input input:focus {
+  outline: none;
+  border-color: var(--accent, #6366f1);
+}
+
+.ep-analyze-btn {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  color: white;
+  border: none;
+  border-radius: 0.625rem;
+  padding: 0.75rem 1.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: opacity 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+
+.ep-analyze-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.ep-analyze-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- 模型选择 --- */
+.ep-section-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary, #94a3b8);
+  margin: 0 0 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ep-model-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ep-model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface-input, rgba(15, 23, 42, 0.4));
+  border: 1px solid var(--border-default, rgba(100, 116, 139, 0.2));
+  border-radius: 99px;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.ep-model-chip.is-active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: #6366f1;
+}
+
+.ep-model-chip.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.ep-model-chip input[type="checkbox"] {
+  accent-color: #6366f1;
+  margin: 0;
+}
+
+.ep-chip-name {
+  font-weight: 600;
+  color: var(--text-primary, #e2e8f0);
+  font-size: 0.85rem;
+}
+
+.ep-chip-provider {
+  font-size: 0.75rem;
+  color: var(--text-tertiary, #64748b);
+}
+
+.ep-empty-hint {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.85rem;
+}
+
+.ep-empty-hint a {
+  color: #818cf8;
+}
+
+/* --- 错误提示 --- */
+.ep-error {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 0.625rem;
+  padding: 0.75rem 1rem;
+  color: #fca5a5;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+/* --- 加载状态 --- */
+.ep-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3rem 0;
+  gap: 1rem;
+  color: var(--text-secondary, #94a3b8);
+}
+
+.ep-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(99, 102, 241, 0.2);
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: ep-spin 0.8s linear infinite;
+}
+
+.ep-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: ep-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes ep-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --- 共识卡片 --- */
+.ep-consensus-card {
+  background: var(--surface-card, rgba(30, 41, 59, 0.6));
+  border: 1px solid var(--border-default, rgba(100, 116, 139, 0.2));
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.ep-consensus-header {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.ep-consensus-score {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 4px solid;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ep-score-value {
+  font-size: 2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ep-score-label {
+  font-size: 0.7rem;
+  color: var(--text-secondary, #94a3b8);
+  margin-top: 0.15rem;
+}
+
+.ep-consensus-info {
+  flex: 1;
+}
+
+.ep-stock-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary, #e2e8f0);
+  margin: 0 0 0.5rem;
+}
+
+.ep-advice-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+}
+
+.ep-advice-badge.ep-advice-买入,
+.ep-advice-badge.ep-advice-加仓 {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.ep-advice-badge.ep-advice-卖出,
+.ep-advice-badge.ep-advice-减仓 {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.ep-advice-badge.ep-advice-持有,
+.ep-advice-badge.ep-advice-观望 {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.ep-consensus-summary {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0;
+  line-height: 1.5;
+}
+
+/* --- 对比表格 --- */
+.ep-comparison {
+  background: var(--surface-card, rgba(30, 41, 59, 0.6));
+  border: 1px solid var(--border-default, rgba(100, 116, 139, 0.2));
+  border-radius: 1rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.ep-table-wrapper {
+  overflow-x: auto;
+}
+
+.ep-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.ep-table th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: var(--text-secondary, #94a3b8);
+  border-bottom: 1px solid var(--border-default, rgba(100, 116, 139, 0.15));
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ep-table td {
+  padding: 0.75rem 1rem;
+  color: var(--text-primary, #e2e8f0);
+  border-bottom: 1px solid var(--border-default, rgba(100, 116, 139, 0.08));
+}
+
+.ep-table tbody tr:hover {
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.ep-row-error td {
+  opacity: 0.5;
+}
+
+.ep-cell-model {
+  font-weight: 600;
+}
+
+.ep-score-pill {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 99px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.ep-score-high {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+}
+
+.ep-score-mid {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.ep-score-low {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+/* --- 详细报告 Tab --- */
+.ep-details {
+  background: var(--surface-card, rgba(30, 41, 59, 0.6));
+  border: 1px solid var(--border-default, rgba(100, 116, 139, 0.2));
+  border-radius: 1rem;
+  padding: 1.5rem;
+}
+
+.ep-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--border-default, rgba(100, 116, 139, 0.15));
+  margin-bottom: 1rem;
+}
+
+.ep-tab {
+  background: none;
+  border: none;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary, #94a3b8);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
+
+.ep-tab:hover {
+  color: var(--text-primary, #e2e8f0);
+}
+
+.ep-tab.is-active {
+  color: #818cf8;
+  border-bottom-color: #6366f1;
+}
+
+.ep-tab-content {
+  padding: 0.5rem 0;
+}
+
+.ep-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.ep-detail-model {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text-primary, #e2e8f0);
+}
+
+.ep-detail-advice {
+  color: var(--text-secondary, #94a3b8);
+  font-size: 0.85rem;
+}
+
+.ep-detail-body {
+  color: var(--text-primary, #e2e8f0);
+  line-height: 1.6;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}

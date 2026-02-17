@@ -19,7 +19,7 @@ export interface ReportMeta {
   queryId: string;
   stockCode: string;
   stockName: string;
-  reportType: 'simple' | 'detailed';
+  reportType: 'simple' | 'detailed' | 'expert_panel';
   createdAt: string;
   currentPrice?: number;
   changePct?: number;

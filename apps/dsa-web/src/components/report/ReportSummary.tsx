@@ -4,6 +4,7 @@ import { ReportOverview } from './ReportOverview';
 import { ReportStrategy } from './ReportStrategy';
 import { ReportNews } from './ReportNews';
 import { ReportDetails } from './ReportDetails';
+import { ExpertPanelReportView } from '../expert-panel/ExpertPanelReportView';
 
 interface ReportSummaryProps {
   data: AnalysisResult | AnalysisReport;
@@ -23,6 +24,18 @@ export const ReportSummary: React.FC<ReportSummaryProps> = ({
   const queryId = 'queryId' in data ? data.queryId : report.meta.queryId;
 
   const { meta, summary, strategy, details } = report;
+
+  // Expert Panel Report
+  if (meta.reportType === 'expert_panel' && details?.rawResult) {
+    // Cast rawResult to ExpertPanelResponse as we know the structure matches
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const expertResult = details.rawResult as any;
+    return (
+      <div className="animate-fade-in">
+        <ExpertPanelReportView result={expertResult} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-fade-in">

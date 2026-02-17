@@ -14,7 +14,7 @@ class SystemConfigFieldSchema(BaseModel):
     key: str = Field(..., description="Configuration key name")
     title: Optional[str] = Field(None, description="Display title")
     description: Optional[str] = Field(None, description="Field description")
-    category: Literal["base", "data_source", "ai_model", "notification", "system", "backtest", "uncategorized"]
+    category: Literal["base", "data_source", "ai_model", "notification", "system", "backtest", "prompt", "uncategorized"]
     data_type: Literal["string", "integer", "number", "boolean", "array", "json", "time"]
     ui_control: Literal["text", "password", "number", "select", "textarea", "switch", "time"]
     is_sensitive: bool
@@ -130,3 +130,16 @@ class SystemConfigConflictResponse(BaseModel):
     error: str
     message: str
     current_config_version: str
+
+
+class FetchModelsRequest(BaseModel):
+    """Request to fetch models from OpenAI-compatible provider."""
+
+    api_key: str = Field(..., description="API Key for the provider")
+    base_url: Optional[str] = Field(None, description="Base URL for the provider")
+
+
+class FetchModelsResponse(BaseModel):
+    """Response containing discovered models."""
+
+    models: List[str] = Field(..., description="List of available model IDs")

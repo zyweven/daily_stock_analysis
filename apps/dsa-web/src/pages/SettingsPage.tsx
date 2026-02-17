@@ -1,5 +1,4 @@
-import type React from 'react';
-import { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSystemConfig } from '../hooks';
 import { SettingsAlert, SettingsField, SettingsLoading } from '../components/settings';
 import { getCategoryDescriptionZh, getCategoryTitleZh } from '../utils/systemConfigI18n';
@@ -17,6 +16,7 @@ const SettingsPage: React.FC = () => {
     clearToast,
     isLoading,
     isSaving,
+    isFetchingModels,
     loadError,
     saveError,
     retryAction,
@@ -24,7 +24,10 @@ const SettingsPage: React.FC = () => {
     retry,
     save,
     setDraftValue,
+    fetchModels,
   } = useSystemConfig();
+
+  const [discoveredModelsByKey, setDiscoveredModelsByKey] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     void load();
@@ -45,6 +48,38 @@ const SettingsPage: React.FC = () => {
   }, [clearToast, toast]);
 
   const activeItems = itemsByCategory[activeCategory] || [];
+
+  const handleFetchModelsForField = async (key: string) => {
+    // Determine which credentials to use based on the field key
+    let apiKey = '';
+    let baseUrl = '';
+
+    if (key === 'OPENAI_MODEL') {
+      apiKey = itemsByCategory.ai_model?.find((i) => i.key === 'OPENAI_API_KEY')?.value || '';
+      baseUrl = itemsByCategory.ai_model?.find((i) => i.key === 'OPENAI_BASE_URL')?.value || '';
+    }
+
+    if (!apiKey || apiKey.includes('***')) {
+      toast?.message !== '请先填写并保存有效的 API Key' &&
+        setActiveCategory('ai_model'); // Ensure we are in the right tab
+      // Actually we can't easily tell if it's masked or just empty here without rawValueExists check
+      // But usually if it's masked and we haven't changed it, we might need to use the server value.
+      // useSystemConfig provides 'serverItems' or 'itemsByCategory' which already has 'value' (draft or server).
+    }
+
+    if (!apiKey) {
+      // Show error via toast
+      return;
+    }
+
+    const discovered = await fetchModels(apiKey, baseUrl);
+    if (discovered.length > 0) {
+      setDiscoveredModelsByKey((prev) => ({
+        ...prev,
+        [key]: discovered,
+      }));
+    }
+  };
 
   return (
     <div className="min-h-screen px-4 pb-6 pt-4 md:px-6">
@@ -110,11 +145,10 @@ const SettingsPage: React.FC = () => {
                   <button
                     key={category.category}
                     type="button"
-                    className={`w-full rounded-lg border px-3 py-2 text-left transition ${
-                      isActive
-                        ? 'border-accent bg-cyan/10 text-white'
-                        : 'border-white/8 bg-elevated/40 text-secondary hover:border-white/16 hover:text-white'
-                    }`}
+                    className={`w-full rounded-lg border px-3 py-2 text-left transition ${isActive
+                      ? 'border-accent bg-cyan/10 text-white'
+                      : 'border-white/8 bg-elevated/40 text-secondary hover:border-white/16 hover:text-white'
+                      }`}
                     onClick={() => setActiveCategory(category.category)}
                   >
                     <span className="flex items-center justify-between text-sm font-medium">
@@ -136,6 +170,9 @@ const SettingsPage: React.FC = () => {
                   item={item}
                   value={item.value}
                   disabled={isSaving}
+                  isFetching={isFetchingModels}
+                  discoveredModels={discoveredModelsByKey[item.key]}
+                  onFetch={item.key === 'OPENAI_MODEL' ? () => void handleFetchModelsForField(item.key) : undefined}
                   onChange={setDraftValue}
                   issues={issueByKey[item.key] || []}
                 />

@@ -120,3 +120,12 @@ export interface SystemConfigConflictResponse {
   message: string;
   currentConfigVersion: string;
 }
+
+export interface FetchModelsRequest {
+  apiKey: string;
+  baseUrl?: string;
+}
+
+export interface FetchModelsResponse {
+  models: string[];
+}

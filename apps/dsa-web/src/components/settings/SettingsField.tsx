@@ -3,6 +3,7 @@ import type React from 'react';
 import { Select } from '../common';
 import type { ConfigValidationIssue, SystemConfigItem } from '../../types/systemConfig';
 import { getFieldDescriptionZh, getFieldTitleZh } from '../../utils/systemConfigI18n';
+import { ExtraModelsEditor } from './ExtraModelsEditor';
 
 function isMultiValueField(item: SystemConfigItem): boolean {
   const validation = (item.schema?.validation ?? {}) as Record<string, unknown>;
@@ -27,6 +28,9 @@ interface SettingsFieldProps {
   value: string;
   disabled?: boolean;
   onChange: (key: string, value: string) => void;
+  onFetch?: () => void;
+  isFetching?: boolean;
+  discoveredModels?: string[];
   issues?: ConfigValidationIssue[];
 }
 
@@ -37,11 +41,24 @@ function renderFieldControl(
   onChange: (nextValue: string) => void,
   isSecretVisible: boolean,
   onToggleSecretVisible: () => void,
+  onFetch?: () => void,
+  isFetching?: boolean,
 ) {
   const schema = item.schema;
   const commonClass = 'input-terminal';
   const controlType = schema?.uiControl ?? 'text';
   const isMultiValue = isMultiValueField(item);
+
+  if (item.key === 'EXTRA_AI_MODELS') {
+    return (
+      <ExtraModelsEditor
+        item={item}
+        value={value}
+        onChange={(_, v) => onChange(v)}
+        disabled={disabled || !schema?.isEditable}
+      />
+    );
+  }
 
   if (controlType === 'textarea') {
     return (
@@ -56,14 +73,14 @@ function renderFieldControl(
 
   if (controlType === 'select' && schema?.options?.length) {
     return (
-        <Select
-          value={value}
-          onChange={onChange}
-          options={schema.options.map((option) => ({ value: option, label: option }))}
-          disabled={disabled || !schema.isEditable}
-          placeholder="请选择"
-        />
-      );
+      <Select
+        value={value}
+        onChange={onChange}
+        options={schema.options.map((option) => ({ value: option, label: option }))}
+        disabled={disabled || !schema.isEditable}
+        placeholder="请选择"
+      />
+    );
   }
 
   if (controlType === 'switch') {
@@ -160,13 +177,25 @@ function renderFieldControl(
   const inputType = controlType === 'number' ? 'number' : controlType === 'time' ? 'time' : 'text';
 
   return (
-    <input
-      type={inputType}
-      className={commonClass}
-      value={value}
-      disabled={disabled || !schema?.isEditable}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <div className="flex items-center gap-2">
+      <input
+        type={inputType}
+        className={`${commonClass} flex-1`}
+        value={value}
+        disabled={disabled || !schema?.isEditable}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {onFetch && (
+        <button
+          type="button"
+          className="btn-secondary !px-3 !py-2 text-xs"
+          disabled={disabled || isFetching || !schema?.isEditable}
+          onClick={onFetch}
+        >
+          {isFetching ? '获取中...' : '获取列表'}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -175,6 +204,9 @@ export const SettingsField: React.FC<SettingsFieldProps> = ({
   value,
   disabled = false,
   onChange,
+  onFetch,
+  isFetching = false,
+  discoveredModels = [],
   issues = [],
 }) => {
   const schema = item.schema;
@@ -209,8 +241,29 @@ export const SettingsField: React.FC<SettingsFieldProps> = ({
           (nextValue) => onChange(item.key, nextValue),
           isSecretVisible,
           () => setIsSecretVisible((previous) => !previous),
+          onFetch,
+          isFetching,
         )}
       </div>
+
+      {discoveredModels.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-white/5 pt-3">
+          <p className="w-full text-[10px] text-muted mb-1">可用模型 (点击选择):</p>
+          {discoveredModels.map((model) => (
+            <button
+              key={model}
+              type="button"
+              className={`rounded px-1.5 py-0.5 text-[10px] transition ${value === model
+                ? 'bg-cyan text-black'
+                : 'bg-white/5 text-secondary hover:bg-white/12 hover:text-white'
+                }`}
+              onClick={() => onChange(item.key, model)}
+            >
+              {model}
+            </button>
+          ))}
+        </div>
+      )}
 
       {schema?.isSensitive ? (
         <p className="mt-2 text-[11px] text-secondary">

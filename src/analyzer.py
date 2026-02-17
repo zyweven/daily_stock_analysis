@@ -331,203 +331,51 @@ class GeminiAnalyzer:
     # 核心模块：核心结论 + 数据透视 + 舆情情报 + 作战计划
     # ========================================
 
-    SYSTEM_PROMPT = """你是一位专注于趋势交易的 A 股投资分析师，负责生成专业的【决策仪表盘】分析报告。
-
-## 核心交易理念（必须严格遵守）
-
-### 1. 严进策略（不追高）
-- **绝对不追高**：当股价偏离 MA5 超过 5% 时，坚决不买入
-- **乖离率公式**：(现价 - MA5) / MA5 × 100%
-- 乖离率 < 2%：最佳买点区间
-- 乖离率 2-5%：可小仓介入
-- 乖离率 > 5%：严禁追高！直接判定为"观望"
-
-### 2. 趋势交易（顺势而为）
-- **多头排列必须条件**：MA5 > MA10 > MA20
-- 只做多头排列的股票，空头排列坚决不碰
-- 均线发散上行优于均线粘合
-- 趋势强度判断：看均线间距是否在扩大
-
-### 3. 效率优先（筹码结构）
-- 关注筹码集中度：90%集中度 < 15% 表示筹码集中
-- 获利比例分析：70-90% 获利盘时需警惕获利回吐
-- 平均成本与现价关系：现价高于平均成本 5-15% 为健康
-
-### 4. 买点偏好（回踩支撑）
-- **最佳买点**：缩量回踩 MA5 获得支撑
-- **次优买点**：回踩 MA10 获得支撑
-- **观望情况**：跌破 MA20 时观望
-
-### 5. 风险排查重点
-- 减持公告（股东、高管减持）
-- 业绩预亏/大幅下滑
-- 监管处罚/立案调查
-- 行业政策利空
-- 大额解禁
-
-## 输出格式：决策仪表盘 JSON
-
-请严格按照以下 JSON 格式输出，这是一个完整的【决策仪表盘】：
-
-```json
-{
-    "stock_name": "股票中文名称",
-    "sentiment_score": 0-100整数,
-    "trend_prediction": "强烈看多/看多/震荡/看空/强烈看空",
-    "operation_advice": "买入/加仓/持有/减仓/卖出/观望",
-    "decision_type": "buy/hold/sell",
-    "confidence_level": "高/中/低",
-
-    "dashboard": {
-        "core_conclusion": {
-            "one_sentence": "一句话核心结论（30字以内，直接告诉用户做什么）",
-            "signal_type": "🟢买入信号/🟡持有观望/🔴卖出信号/⚠️风险警告",
-            "time_sensitivity": "立即行动/今日内/本周内/不急",
-            "position_advice": {
-                "no_position": "空仓者建议：具体操作指引",
-                "has_position": "持仓者建议：具体操作指引"
-            }
-        },
-
-        "data_perspective": {
-            "trend_status": {
-                "ma_alignment": "均线排列状态描述",
-                "is_bullish": true/false,
-                "trend_score": 0-100
-            },
-            "price_position": {
-                "current_price": 当前价格数值,
-                "ma5": MA5数值,
-                "ma10": MA10数值,
-                "ma20": MA20数值,
-                "bias_ma5": 乖离率百分比数值,
-                "bias_status": "安全/警戒/危险",
-                "support_level": 支撑位价格,
-                "resistance_level": 压力位价格
-            },
-            "volume_analysis": {
-                "volume_ratio": 量比数值,
-                "volume_status": "放量/缩量/平量",
-                "turnover_rate": 换手率百分比,
-                "volume_meaning": "量能含义解读（如：缩量回调表示抛压减轻）"
-            },
-            "chip_structure": {
-                "profit_ratio": 获利比例,
-                "avg_cost": 平均成本,
-                "concentration": 筹码集中度,
-                "chip_health": "健康/一般/警惕"
-            }
-        },
-
-        "intelligence": {
-            "latest_news": "【最新消息】近期重要新闻摘要",
-            "risk_alerts": ["风险点1：具体描述", "风险点2：具体描述"],
-            "positive_catalysts": ["利好1：具体描述", "利好2：具体描述"],
-            "earnings_outlook": "业绩预期分析（基于年报预告、业绩快报等）",
-            "sentiment_summary": "舆情情绪一句话总结"
-        },
-
-        "battle_plan": {
-            "sniper_points": {
-                "ideal_buy": "理想买入点：XX元（在MA5附近）",
-                "secondary_buy": "次优买入点：XX元（在MA10附近）",
-                "stop_loss": "止损位：XX元（跌破MA20或X%）",
-                "take_profit": "目标位：XX元（前高/整数关口）"
-            },
-            "position_strategy": {
-                "suggested_position": "建议仓位：X成",
-                "entry_plan": "分批建仓策略描述",
-                "risk_control": "风控策略描述"
-            },
-            "action_checklist": [
-                "✅/⚠️/❌ 检查项1：多头排列",
-                "✅/⚠️/❌ 检查项2：乖离率<5%",
-                "✅/⚠️/❌ 检查项3：量能配合",
-                "✅/⚠️/❌ 检查项4：无重大利空",
-                "✅/⚠️/❌ 检查项5：筹码健康"
-            ]
-        }
-    },
-
-    "analysis_summary": "100字综合分析摘要",
-    "key_points": "3-5个核心看点，逗号分隔",
-    "risk_warning": "风险提示",
-    "buy_reason": "操作理由，引用交易理念",
-
-    "trend_analysis": "走势形态分析",
-    "short_term_outlook": "短期1-3日展望",
-    "medium_term_outlook": "中期1-2周展望",
-    "technical_analysis": "技术面综合分析",
-    "ma_analysis": "均线系统分析",
-    "volume_analysis": "量能分析",
-    "pattern_analysis": "K线形态分析",
-    "fundamental_analysis": "基本面分析",
-    "sector_position": "板块行业分析",
-    "company_highlights": "公司亮点/风险",
-    "news_summary": "新闻摘要",
-    "market_sentiment": "市场情绪",
-    "hot_topics": "相关热点",
-
-    "search_performed": true/false,
-    "data_sources": "数据来源说明"
-}
-```
-
-## 评分标准
-
-### 强烈买入（80-100分）：
-- ✅ 多头排列：MA5 > MA10 > MA20
-- ✅ 低乖离率：<2%，最佳买点
-- ✅ 缩量回调或放量突破
-- ✅ 筹码集中健康
-- ✅ 消息面有利好催化
-
-### 买入（60-79分）：
-- ✅ 多头排列或弱势多头
-- ✅ 乖离率 <5%
-- ✅ 量能正常
-- ⚪ 允许一项次要条件不满足
-
-### 观望（40-59分）：
-- ⚠️ 乖离率 >5%（追高风险）
-- ⚠️ 均线缠绕趋势不明
-- ⚠️ 有风险事件
-
-### 卖出/减仓（0-39分）：
-- ❌ 空头排列
-- ❌ 跌破MA20
-- ❌ 放量下跌
-- ❌ 重大利空
-
-## 决策仪表盘核心原则
-
-1. **核心结论先行**：一句话说清该买该卖
-2. **分持仓建议**：空仓者和持仓者给不同建议
-3. **精确狙击点**：必须给出具体价格，不说模糊的话
-4. **检查清单可视化**：用 ✅⚠️❌ 明确显示每项检查结果
-5. **风险优先级**：舆情中的风险点要醒目标出"""
-
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, model_params: Optional[Dict[str, Any]] = None):
         """
         初始化 AI 分析器
 
-        优先级：Gemini > OpenAI 兼容 API
+        优先级：
+        1. 如果提供了 model_params，则按 params 指定的 provider 初始化
+        2. 如果未提供 params，则按常规逻辑：Gemini > OpenAI 兼容 API
 
         Args:
-            api_key: Gemini API Key（可选，默认从配置读取）
+            api_key: Gemini API Key（可选，兼容旧调用）
+            model_params: 模型详细参数（可选），包含 provider, api_key, base_url, model, temperature 等
         """
         config = get_config()
-        self._api_key = api_key or config.gemini_api_key
+        
+        # Load system prompt from config (which falls back to file)
+        self.system_prompt = config.system_prompt_template
+        if not self.system_prompt:
+            logger.warning("系统提示词未配置且默认文件缺失，AI 分析可能异常")
+            self.system_prompt = "You are a helpful stock analysis assistant."
+
         self._model = None
         self._current_model_name = None  # 当前使用的模型名称
         self._using_fallback = False  # 是否正在使用备选模型
         self._use_openai = False  # 是否使用 OpenAI 兼容 API
         self._openai_client = None  # OpenAI 客户端
 
+        # 如果提供了 explicit params
+        if model_params:
+            provider = model_params.get("provider", "gemini").lower()
+            self._api_key = model_params.get("api_key") or api_key
+            
+            if provider == "openai":
+                self._init_openai_fallback(model_params)
+            else:
+                self._init_model(model_params)
+            
+            if not self._model and not self._openai_client:
+                logger.warning(f"指定模型 {model_params.get('name', 'Unknown')} 初始化失败")
+            return
+
+        # 常规逻辑（无 params）
+        self._api_key = api_key or config.gemini_api_key
         # 检查 Gemini API Key 是否有效（过滤占位符）
         gemini_key_valid = self._api_key and not self._api_key.startswith('your_') and len(self._api_key) > 10
 
-        # 优先尝试初始化 Gemini
         if gemini_key_valid:
             try:
                 self._init_model()
@@ -543,30 +391,29 @@ class GeminiAnalyzer:
         if not self._model and not self._openai_client:
             logger.warning("未配置任何 AI API Key，AI 分析功能将不可用")
 
-    def _init_openai_fallback(self) -> None:
+    def _init_openai_fallback(self, params: Optional[Dict[str, Any]] = None) -> None:
         """
-        初始化 OpenAI 兼容 API 作为备选
-
-        支持所有 OpenAI 格式的 API，包括：
-        - OpenAI 官方
-        - DeepSeek
-        - 通义千问
-        - Moonshot 等
+        初始化 OpenAI 兼容 API
         """
         config = get_config()
 
-        # 检查 OpenAI API Key 是否有效（过滤占位符）
-        openai_key_valid = (
-            config.openai_api_key and
-            not config.openai_api_key.startswith('your_') and
-            len(config.openai_api_key) > 10
-        )
+        # 提取参数
+        if params:
+            api_key = params.get("api_key")
+            base_url = params.get("base_url")
+            model = params.get("model")
+            verify_ssl = params.get("verify_ssl", True)
+        else:
+            api_key = config.openai_api_key
+            base_url = config.openai_base_url
+            model = config.openai_model
+            verify_ssl = config.openai_verify_ssl
 
-        if not openai_key_valid:
-            logger.debug("OpenAI 兼容 API 未配置或配置无效")
+        # 检查 API Key
+        if not api_key or api_key.startswith('your_') or len(api_key) < 10:
+            logger.debug("OpenAI API Key 未配置或配置无效")
             return
 
-        # 分离 import 和客户端创建，以便提供更准确的错误信息
         try:
             from openai import OpenAI
         except ImportError:
@@ -574,40 +421,25 @@ class GeminiAnalyzer:
             return
 
         try:
-            # base_url 可选，不填则使用 OpenAI 官方默认地址
-            client_kwargs = {"api_key": config.openai_api_key}
-            if config.openai_base_url and config.openai_base_url.startswith('http'):
-                client_kwargs["base_url"] = config.openai_base_url
+            client_kwargs = {"api_key": api_key}
+            if base_url and base_url.startswith('http'):
+                client_kwargs["base_url"] = base_url
 
             # 配置 SSL 证书校验 (httpx Client)
             import httpx
-            http_client = httpx.Client(verify=config.openai_verify_ssl)
+            http_client = httpx.Client(verify=verify_ssl)
             client_kwargs["http_client"] = http_client
 
             self._openai_client = OpenAI(**client_kwargs)
-            self._current_model_name = config.openai_model
+            self._current_model_name = model
             self._use_openai = True
-            logger.info(f"OpenAI 兼容 API 初始化成功 (base_url: {config.openai_base_url}, model: {config.openai_model}, verify_ssl: {config.openai_verify_ssl})")
-        except ImportError as e:
-            # 依赖缺失（如 socksio）
-            if 'socksio' in str(e).lower() or 'socks' in str(e).lower():
-                logger.error(f"OpenAI 客户端需要 SOCKS 代理支持，请运行: pip install httpx[socks] 或 pip install socksio")
-            else:
-                logger.error(f"OpenAI 依赖缺失: {e}")
+            logger.info(f"OpenAI 兼容 API 初始化成功 (base_url: {base_url}, model: {model}, verify_ssl: {verify_ssl})")
         except Exception as e:
-            error_msg = str(e).lower()
-            if 'socks' in error_msg or 'socksio' in error_msg or 'proxy' in error_msg:
-                logger.error(f"OpenAI 代理配置错误: {e}，如使用 SOCKS 代理请运行: pip install httpx[socks]")
-            else:
-                logger.error(f"OpenAI 兼容 API 初始化失败: {e}")
+            logger.error(f"OpenAI 初始化失败: {e}")
 
-    def _init_model(self) -> None:
+    def _init_model(self, params: Optional[Dict[str, Any]] = None) -> None:
         """
         初始化 Gemini 模型
-
-        配置：
-        - 使用 gemini-3-flash-preview 或 gemini-2.5-flash 模型
-        - 不启用 Google Search（使用外部 Tavily/SerpAPI 搜索）
         """
         try:
             import google.generativeai as genai
@@ -615,29 +447,32 @@ class GeminiAnalyzer:
             # 配置 API Key
             genai.configure(api_key=self._api_key)
 
-            # 从配置获取模型名称
             config = get_config()
-            model_name = config.gemini_model
-            fallback_model = config.gemini_model_fallback
-
-            # 不再使用 Google Search Grounding（已知有兼容性问题）
-            # 改为使用外部搜索服务（Tavily/SerpAPI）预先获取新闻
+            if params:
+                model_name = params.get("model") or config.gemini_model
+                fallback_model = params.get("fallback_model") or config.gemini_model_fallback
+            else:
+                model_name = config.gemini_model
+                fallback_model = config.gemini_model_fallback
 
             # 尝试初始化主模型
             try:
                 self._model = genai.GenerativeModel(
                     model_name=model_name,
-                    system_instruction=self.SYSTEM_PROMPT,
+                    system_instruction=self.system_prompt,
                 )
                 self._current_model_name = model_name
                 self._using_fallback = False
                 logger.info(f"Gemini 模型初始化成功 (模型: {model_name})")
             except Exception as model_error:
+                if params:
+                    raise model_error  # 如果是显式参数，直接报错
+                
                 # 尝试备选模型
                 logger.warning(f"主模型 {model_name} 初始化失败: {model_error}，尝试备选模型 {fallback_model}")
                 self._model = genai.GenerativeModel(
                     model_name=fallback_model,
-                    system_instruction=self.SYSTEM_PROMPT,
+                    system_instruction=self.system_prompt,
                 )
                 self._current_model_name = fallback_model
                 self._using_fallback = True
@@ -662,7 +497,7 @@ class GeminiAnalyzer:
             logger.warning(f"[LLM] 切换到备选模型: {fallback_model}")
             self._model = genai.GenerativeModel(
                 model_name=fallback_model,
-                system_instruction=self.SYSTEM_PROMPT,
+                system_instruction=self.system_prompt,
             )
             self._current_model_name = fallback_model
             self._using_fallback = True
@@ -695,7 +530,7 @@ class GeminiAnalyzer:
             kwargs = {
                 "model": self._current_model_name,
                 "messages": [
-                    {"role": "system", "content": self.SYSTEM_PROMPT},
+                    {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": generation_config.get('temperature', config.openai_temperature),
@@ -930,13 +765,13 @@ class GeminiAnalyzer:
             logger.debug(f"=== 完整 Prompt ({len(prompt)}字符) ===\n{prompt}\n=== End Prompt ===")
 
             # 设置生成配置（从配置文件读取温度参数）
-            config = get_config()
             generation_config = {
                 "temperature": config.gemini_temperature,
+                "top_p": 0.95,
+                "top_k": 40,
                 "max_output_tokens": 8192,
             }
 
-            # 根据实际使用的 API 显示日志
             api_provider = "OpenAI" if self._use_openai else "Gemini"
             logger.info(f"[LLM调用] 开始调用 {api_provider} API...")
             

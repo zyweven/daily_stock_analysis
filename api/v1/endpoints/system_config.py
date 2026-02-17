@@ -18,6 +18,8 @@ from api.v1.schemas.system_config import (
     UpdateSystemConfigResponse,
     ValidateSystemConfigRequest,
     ValidateSystemConfigResponse,
+    FetchModelsRequest,
+    FetchModelsResponse,
 )
 from src.services.system_config_service import ConfigConflictError, ConfigValidationError, SystemConfigService
 
@@ -163,5 +165,32 @@ def get_system_config_schema(
             detail={
                 "error": "internal_error",
                 "message": "Failed to load system configuration schema",
+            },
+        )
+@router.post(
+    "/config/fetch-models",
+    response_model=FetchModelsResponse,
+    responses={
+        200: {"description": "Models fetched successfully"},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
+    summary="Fetch available models",
+    description="Fetch available models from an OpenAI-compatible provider using API key and base URL.",
+)
+def fetch_models(
+    request: FetchModelsRequest,
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> FetchModelsResponse:
+    """Proxy the model fetching request to the AI provider."""
+    try:
+        models = service.fetch_openai_models(api_key=request.api_key, base_url=request.base_url)
+        return FetchModelsResponse(models=models)
+    except Exception as exc:
+        logger.error("Failed to fetch models: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "fetch_failed",
+                "message": f"Failed to fetch models: {str(exc)}",
             },
         )

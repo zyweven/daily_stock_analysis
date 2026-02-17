@@ -9,6 +9,8 @@ import type {
   UpdateSystemConfigResponse,
   ValidateSystemConfigRequest,
   ValidateSystemConfigResponse,
+  FetchModelsRequest,
+  FetchModelsResponse,
 } from '../types/systemConfig';
 
 type ApiErrorPayload = {
@@ -120,5 +122,13 @@ export const systemConfigApi = {
 
       throw new Error(extractApiMessage(error, '更新系统配置失败'));
     }
+  },
+
+  async fetchModels(payload: FetchModelsRequest): Promise<FetchModelsResponse> {
+    const response = await apiClient.post<Record<string, unknown>>('/api/v1/system/config/fetch-models', {
+      api_key: payload.apiKey,
+      base_url: payload.baseUrl,
+    });
+    return toCamelCase<FetchModelsResponse>(response.data);
   },
 };

@@ -1,13 +1,12 @@
-# -*- coding: utf-8 -*-
-"""System configuration service for `.env` based settings."""
-
-from __future__ import annotations
-
+from datetime import datetime
 import logging
 import re
+import httpx
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from pathlib import Path
 
 from src.config import Config, setup_env
+from src.core.config_backend import get_config_backend
 from src.core.config_manager import ConfigManager
 from src.core.config_registry import (
     build_schema_response,
@@ -38,8 +37,9 @@ class ConfigConflictError(Exception):
 class SystemConfigService:
     """Service layer for reading, validating, and updating runtime configuration."""
 
-    def __init__(self, manager: Optional[ConfigManager] = None):
-        self._manager = manager or ConfigManager()
+    def __init__(self, manager: Optional[Any] = None):
+        # 使用 pluggable 后端
+        self._backend = manager if manager else get_config_backend()
 
     def get_schema(self) -> Dict[str, Any]:
         """Return grouped schema metadata for UI rendering."""
@@ -47,7 +47,7 @@ class SystemConfigService:
 
     def get_config(self, include_schema: bool = True, mask_token: str = "******") -> Dict[str, Any]:
         """Return current config values without server-side secret masking."""
-        config_map = self._manager.read_config_map()
+        config_map = self._backend.read_config_map()
         registered_keys = set(get_registered_field_keys())
         all_keys = set(config_map.keys()) | registered_keys
 
@@ -64,6 +64,19 @@ class SystemConfigService:
         items: List[Dict[str, Any]] = []
         for key in all_keys:
             raw_value = config_map.get(key, "")
+
+            # [UX Improvement] Pre-fill default prompt if empty
+            if key == "SYSTEM_PROMPT_TEMPLATE" and not raw_value:
+                try:
+                    # Dynamically locate default prompt file relative to this service file
+                    # File path: src/services/system_config_service.py -> src/prompts/default_prompt.md
+                    prompt_path = Path(__file__).parent.parent / "prompts" / "default_prompt.md"
+                    if prompt_path.exists():
+                        raw_value = prompt_path.read_text(encoding="utf-8")
+                except Exception:
+                    # Fail silently on read error, preserving empty value
+                    pass
+
             field_schema = schema_by_key[key]
             item: Dict[str, Any] = {
                 "key": key,
@@ -84,14 +97,14 @@ class SystemConfigService:
         )
 
         return {
-            "config_version": self._manager.get_config_version(),
+            "config_version": self._backend.get_config_version(),
             "mask_token": mask_token,
             "items": items,
-            "updated_at": self._manager.get_updated_at(),
+            "updated_at": self._backend.get_updated_at(),
         }
 
     def validate(self, items: Sequence[Dict[str, str]], mask_token: str = "******") -> Dict[str, Any]:
-        """Validate submitted items without writing to `.env`."""
+        """Validate submitted items without writing to backend."""
         issues = self._collect_issues(items=items, mask_token=mask_token)
         valid = not any(issue["severity"] == "error" for issue in issues)
         return {
@@ -106,8 +119,8 @@ class SystemConfigService:
         mask_token: str = "******",
         reload_now: bool = True,
     ) -> Dict[str, Any]:
-        """Validate and persist updates into `.env`, then reload runtime config."""
-        current_version = self._manager.get_config_version()
+        """Validate and persist updates into backend, then reload runtime config."""
+        current_version = self._backend.get_config_version()
         if current_version != config_version:
             raise ConfigConflictError(current_version=current_version)
 
@@ -126,7 +139,7 @@ class SystemConfigService:
             if bool(field_schema.get("is_sensitive", False)):
                 sensitive_keys.add(key)
 
-        updated_keys, skipped_masked_keys, new_version = self._manager.apply_updates(
+        updated_keys, skipped_masked_keys, new_version = self._backend.apply_updates(
             updates=updates,
             sensitive_keys=sensitive_keys,
             mask_token=mask_token,
@@ -155,9 +168,45 @@ class SystemConfigService:
             "warnings": warnings,
         }
 
+    @staticmethod
+    def fetch_openai_models(api_key: str, base_url: Optional[str] = None) -> List[str]:
+        """Fetch available models from an OpenAI-compatible provider."""
+        if not api_key or api_key.startswith("your_"):
+            return []
+
+        url = f"{base_url.rstrip('/')}/models" if base_url else "https://api.openai.com/v1/models"
+        if not url.startswith("http"):
+             url = f"https://{url}" if not url.startswith("api.") else f"https://{url}/v1/models"
+        
+        # Ensure url ends with /models
+        if not url.endswith("/models"):
+            if "/v1" in url and not url.endswith("/v1"):
+                 url = url.rstrip("/") + "/models"
+            else:
+                 # Default heuristic
+                 pass
+
+        logger.info(f"Fetching models from {url}")
+        try:
+            headers = {"Authorization": f"Bearer {api_key}"}
+            with httpx.Client(timeout=10.0) as client:
+                response = client.get(url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+                
+                # OpenAI format: {"data": [{"id": "model-1"}, ...]}
+                if isinstance(data, dict) and "data" in data:
+                    models = [m["id"] for m in data["data"] if isinstance(m, dict) and "id" in m]
+                    # Sort and limit
+                    return sorted(models)
+                return []
+        except Exception as e:
+            logger.error(f"Failed to fetch models from {url}: {e}")
+            raise RuntimeError(f"Fetch models failed: {str(e)}")
+
     def _collect_issues(self, items: Sequence[Dict[str, str]], mask_token: str) -> List[Dict[str, Any]]:
         """Collect field-level and cross-field validation issues."""
-        current_map = self._manager.read_config_map()
+        current_map = self._backend.read_config_map()
         effective_map = dict(current_map)
         issues: List[Dict[str, Any]] = []
         updated_map: Dict[str, str] = {}

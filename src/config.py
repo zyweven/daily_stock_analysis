@@ -243,6 +243,12 @@ class Config:
     
     # Discord 机器人扩展配置
     discord_bot_status: str = "A股智能分析 | /help"  # 机器人状态信息
+
+    # 扩展 AI 模型配置 (JSON 字符串)
+    extra_ai_models: Optional[str] = None
+
+    # 系统提示词模板
+    system_prompt_template: Optional[str] = None
     
     # 单例实例存储
     _instance: Optional['Config'] = None
@@ -449,6 +455,8 @@ class Config:
             telegram_webhook_secret=os.getenv('TELEGRAM_WEBHOOK_SECRET'),
             # Discord 机器人扩展配置
             discord_bot_status=os.getenv('DISCORD_BOT_STATUS', 'A股智能分析 | /help'),
+            # 扩展 AI 模型配置
+            extra_ai_models=os.getenv('EXTRA_AI_MODELS'),
             # 实时行情增强数据配置
             enable_realtime_quote=os.getenv('ENABLE_REALTIME_QUOTE', 'true').lower() == 'true',
             enable_chip_distribution=os.getenv('ENABLE_CHIP_DISTRIBUTION', 'true').lower() == 'true',
@@ -459,7 +467,9 @@ class Config:
             # - tushare: Tushare Pro，需要2000积分，数据全面
             realtime_source_priority=cls._resolve_realtime_source_priority(),
             realtime_cache_ttl=int(os.getenv('REALTIME_CACHE_TTL', '600')),
-            circuit_breaker_cooldown=int(os.getenv('CIRCUIT_BREAKER_COOLDOWN', '300'))
+            circuit_breaker_cooldown=int(os.getenv('CIRCUIT_BREAKER_COOLDOWN', '300')),
+            # 系统提示词模板
+            system_prompt_template=cls._resolve_system_prompt_template()
         )
     
     @classmethod
@@ -518,6 +528,27 @@ class Config:
             return resolved
 
         return default_priority
+
+    @classmethod
+    def _resolve_system_prompt_template(cls) -> str:
+        """
+        Resolve system prompt template.
+        Priority:
+        1. Environment variable SYSTEM_PROMPT_TEMPLATE (or DB if using DbBackend)
+        2. Content of src/prompts/default_prompt.md
+        """
+        env_val = os.getenv('SYSTEM_PROMPT_TEMPLATE')
+        if env_val:
+            return env_val
+        
+        # Fallback to file
+        try:
+            prompt_path = Path(__file__).parent / 'prompts' / 'default_prompt.md'
+            if prompt_path.exists():
+                return prompt_path.read_text(encoding='utf-8')
+        except Exception:
+            pass
+        return ""
 
     @classmethod
     def reset_instance(cls) -> None:
