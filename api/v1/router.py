@@ -11,7 +11,7 @@ API v1 路由聚合
 
 from fastapi import APIRouter
 
-from api.v1.endpoints import analysis, history, stocks, backtest, system_config, expert_panel
+from api.v1.endpoints import analysis, history, stocks, backtest, system_config, expert_panel, chat
 
 # 创建 v1 版本主路由
 router = APIRouter(prefix="/api/v1")
@@ -51,3 +51,10 @@ router.include_router(
     prefix="/expert-panel",
     tags=["ExpertPanel"]
 )
+
+router.include_router(
+    chat.router,
+    prefix="/chat",
+    tags=["Chat"]
+)
+

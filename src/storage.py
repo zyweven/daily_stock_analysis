@@ -195,6 +195,102 @@ class StockInfo(Base):
         }
 
 
+class ChatSession(Base):
+    """
+    AI 对话会话
+    
+    存储每个对话会话的基本信息，支持关联股票和模型选择。
+    """
+    __tablename__ = 'chat_session'
+    
+    id = Column(String(36), primary_key=True)        # UUID
+    title = Column(String(200), default='新对话')      # 会话标题（首条消息自动生成）
+    stock_code = Column(String(10), nullable=True)    # 当前关联股票（可空）
+    model_name = Column(String(100), nullable=True)   # 使用的模型名称
+    message_count = Column(Integer, default=0)        # 消息计数
+    
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    __table_args__ = (
+        Index('ix_chat_session_updated', 'updated_at'),
+        Index('ix_chat_session_stock', 'stock_code'),
+    )
+    
+    def __repr__(self):
+        return f"<ChatSession(id={self.id}, title={self.title})>"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        return {
+            'id': self.id,
+            'title': self.title,
+            'stock_code': self.stock_code,
+            'model_name': self.model_name,
+            'message_count': self.message_count,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class ChatMessage(Base):
+    """
+    AI 对话消息
+    
+    支持 4 种角色类型：
+    - user: 用户消息
+    - assistant: AI 回复
+    - tool_call: AI 发起的工具调用
+    - tool_result: 工具执行结果
+    """
+    __tablename__ = 'chat_message'
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(String(36), ForeignKey('chat_session.id', ondelete='CASCADE'),
+                        nullable=False)
+    role = Column(String(15), nullable=False)     # 'user' | 'assistant' | 'tool_call' | 'tool_result'
+    content = Column(Text, nullable=False)        # 消息内容 / JSON
+    
+    # 工具调用元数据
+    tool_name = Column(String(50), nullable=True)   # 工具名称
+    tool_args = Column(Text, nullable=True)         # JSON: 工具参数
+    
+    # AI 响应元数据
+    model_name = Column(String(100), nullable=True)   # 生成回复的模型
+    token_count = Column(Integer, nullable=True)      # Token 数估算
+    response_time_ms = Column(Integer, nullable=True) # 响应耗时(ms)
+    
+    created_at = Column(DateTime, default=datetime.now)
+    
+    __table_args__ = (
+        Index('ix_chat_msg_session', 'session_id', 'created_at'),
+    )
+    
+    def __repr__(self):
+        preview = self.content[:30] if self.content else ''
+        return f"<ChatMessage(id={self.id}, role={self.role}, content={preview}...)>"
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """转换为字典"""
+        result = {
+            'id': self.id,
+            'session_id': self.session_id,
+            'role': self.role,
+            'content': self.content,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+        if self.tool_name:
+            result['tool_name'] = self.tool_name
+            result['tool_args'] = self.tool_args
+        if self.model_name:
+            result['model_name'] = self.model_name
+        if self.token_count is not None:
+            result['token_count'] = self.token_count
+        if self.response_time_ms is not None:
+            result['response_time_ms'] = self.response_time_ms
+        return result
+
+
 class NewsIntel(Base):
     """
     新闻情报数据模型

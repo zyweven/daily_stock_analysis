@@ -6,34 +6,34 @@
   --color-cyan: #00d4ff;
   --color-cyan-dim: #00a8cc;
   --color-cyan-glow: rgba(0, 212, 255, 0.4);
-  
+
   /* 辅助色 - 紫色系 */
   --color-purple: #00d4ff;
   --color-purple-dim: #00a8cc;
   --color-purple-glow: rgba(168, 85, 247, 0.3);
-  
+
   /* 状态色 */
   --color-success: #00ff88;
   --color-warning: #ffaa00;
   --color-danger: #ff4466;
-  
+
   /* 背景色 - 深黑系 */
   --bg-base: #08080c;
   --bg-card: #0d0d14;
   --bg-elevated: #12121a;
   --bg-hover: #1a1a24;
-  
+
   /* 边框色 */
   --border-dim: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-accent: rgba(0, 212, 255, 0.3);
   --border-purple: rgba(47, 165, 245, 0.3);
-  
+
   /* 文字色 */
   --text-primary: #ffffff;
   --text-secondary: #a0a0b0;
   --text-muted: #606070;
-  
+
   /* 字体 */
   font-family: 'Inter', 'SF Pro Display', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
@@ -68,12 +68,10 @@ body {
   inset: 0;
   border-radius: 12px;
   padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgba(85, 198, 247, 0.2) 0%,
-    rgba(0, 212, 255, 0.1) 50%,
-    rgba(85, 198, 247, 0.2) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(85, 198, 247, 0.2) 0%,
+      rgba(0, 212, 255, 0.1) 50%,
+      rgba(85, 198, 247, 0.2) 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -104,12 +102,10 @@ body {
   inset: 0;
   border-radius: 12px;
   padding: 1px;
-  background: linear-gradient(
-    180deg,
-    rgba(67, 178, 246, 0.4) 0%,
-    rgba(168, 85, 247, 0.1) 50%,
-    rgba(0, 212, 255, 0.2) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(67, 178, 246, 0.4) 0%,
+      rgba(168, 85, 247, 0.1) 50%,
+      rgba(0, 212, 255, 0.2) 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -140,12 +136,10 @@ body {
   inset: 0;
   border-radius: 12px;
   padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgba(85, 209, 247, 0.25) 0%,
-    rgba(0, 212, 255, 0.15) 50%,
-    rgba(85, 209, 247, 0.1) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(85, 209, 247, 0.25) 0%,
+      rgba(0, 212, 255, 0.15) 50%,
+      rgba(85, 209, 247, 0.1) 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -161,12 +155,10 @@ body {
   left: 10%;
   right: 10%;
   height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.15) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.15) 50%,
+      transparent 100%);
   pointer-events: none;
 }
 
@@ -190,12 +182,10 @@ body {
   inset: 0;
   border-radius: 8px;
   padding: 1px;
-  background: linear-gradient(
-    135deg,
-    rgba(85, 185, 247, 0.15) 0%,
-    transparent 50%,
-    rgba(0, 212, 255, 0.1) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(85, 185, 247, 0.15) 0%,
+      transparent 50%,
+      rgba(0, 212, 255, 0.1) 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -222,11 +212,9 @@ body {
 
 .history-item.active::before {
   opacity: 1;
-  background: linear-gradient(
-    135deg,
-    rgba(0, 212, 255, 0.3) 0%,
-    rgba(168, 85, 247, 0.15) 100%
-  );
+  background: linear-gradient(135deg,
+      rgba(0, 212, 255, 0.3) 0%,
+      rgba(168, 85, 247, 0.15) 100%);
 }
 
 /* ============ 浮动 Dock 导航栏 ============ */
@@ -266,11 +254,9 @@ body {
   border-radius: inherit;
   padding: 1px;
   /* 渐变边框优化：更低调的颜色 */
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.1) 0%,
-    rgba(255, 255, 255, 0.05) 100%
-  );
+  background: linear-gradient(180deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.05) 100%);
   -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
   -webkit-mask-composite: xor;
@@ -388,7 +374,8 @@ body {
 .dock-item.is-active {
   /* 复用 Logo 的渐变背景 */
   background: linear-gradient(135deg, rgba(51, 110, 168, 0.45) 0%, #367db5 100%);
-  color: #04141d; /* 深色图标 */
+  color: #04141d;
+  /* 深色图标 */
   border-color: transparent;
   box-shadow: 0 8px 16px rgba(0, 212, 255, 0.25);
   /* Logo 的弹跳动画曲线 */
@@ -599,7 +586,7 @@ body {
   padding-left: 10px;
 }
 
-.feed-item + .feed-item {
+.feed-item+.feed-item {
   margin-top: 8px;
 }
 
@@ -624,16 +611,22 @@ body {
 
 /* ============ 动画效果 ============ */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { 
+  from {
     opacity: 0;
     transform: translateY(10px);
   }
-  to { 
+
+  to {
     opacity: 1;
     transform: translateY(0);
   }
@@ -644,6 +637,7 @@ body {
     opacity: 0;
     transform: translateX(100%);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);
@@ -651,17 +645,25 @@ body {
 }
 
 @keyframes pulse-glow {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 20px var(--color-cyan-glow);
   }
+
   50% {
     box-shadow: 0 0 40px var(--color-cyan-glow);
   }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-fade-in {
@@ -685,20 +687,53 @@ body {
 }
 
 /* ============ 工具类 ============ */
-.text-cyan { color: var(--color-cyan); }
-.text-purple { color: var(--color-purple); }
-.text-success { color: var(--color-success); }
-.text-danger { color: var(--color-danger); }
-.text-warning { color: var(--color-warning); }
-.text-muted { color: var(--text-muted); }
-.text-secondary { color: var(--text-secondary); }
+.text-cyan {
+  color: var(--color-cyan);
+}
 
-.bg-base { background: var(--bg-base); }
-.bg-card { background: var(--bg-card); }
-.bg-elevated { background: var(--bg-elevated); }
+.text-purple {
+  color: var(--color-purple);
+}
 
-.border-accent { border-color: var(--border-accent); }
-.border-purple { border-color: var(--border-purple); }
+.text-success {
+  color: var(--color-success);
+}
+
+.text-danger {
+  color: var(--color-danger);
+}
+
+.text-warning {
+  color: var(--color-warning);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.bg-base {
+  background: var(--bg-base);
+}
+
+.bg-card {
+  background: var(--bg-card);
+}
+
+.bg-elevated {
+  background: var(--bg-elevated);
+}
+
+.border-accent {
+  border-color: var(--border-accent);
+}
+
+.border-purple {
+  border-color: var(--border-purple);
+}
 
 /* 发光效果 */
 .glow-cyan {
@@ -736,4 +771,194 @@ body {
   .dock-safe-area {
     padding-left: 88px;
   }
+}
+
+/* ============ Markdown 渲染样式（AI 对话） ============ */
+.markdown-body {
+  color: #e0e0e8;
+  line-height: 1.7;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.markdown-body>*:first-child {
+  margin-top: 0;
+}
+
+.markdown-body>*:last-child {
+  margin-bottom: 0;
+}
+
+/* 标题 */
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  color: #ffffff;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+}
+
+.markdown-body h1 {
+  font-size: 1.4em;
+}
+
+.markdown-body h2 {
+  font-size: 1.2em;
+}
+
+.markdown-body h3 {
+  font-size: 1.1em;
+}
+
+.markdown-body h4 {
+  font-size: 1em;
+}
+
+/* 段落 */
+.markdown-body p {
+  margin: 0.5em 0;
+}
+
+/* 列表 */
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+
+.markdown-body li {
+  margin: 0.25em 0;
+}
+
+.markdown-body li>p {
+  margin: 0.15em 0;
+}
+
+.markdown-body ul {
+  list-style: disc;
+}
+
+.markdown-body ol {
+  list-style: decimal;
+}
+
+.markdown-body ul ul {
+  list-style: circle;
+}
+
+/* 强调 */
+.markdown-body strong {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.markdown-body em {
+  color: #c0c0d0;
+}
+
+/* 行内代码 */
+.markdown-body code {
+  background: rgba(0, 150, 255, 0.1);
+  color: #7dd3fc;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+/* 代码块（pre > code 不重复 padding） */
+.markdown-body pre {
+  background: rgba(8, 8, 20, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 12px 16px;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
+.markdown-body pre code {
+  background: none;
+  color: #c0d0e8;
+  padding: 0;
+  border-radius: 0;
+  font-size: 0.85em;
+}
+
+/* 表格 */
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.9em;
+}
+
+.markdown-body th {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.markdown-body td {
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.markdown-body tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+/* 引用 */
+.markdown-body blockquote {
+  border-left: 3px solid rgba(0, 180, 255, 0.5);
+  padding: 0.5em 1em;
+  margin: 0.75em 0;
+  color: #a0b0c8;
+  background: rgba(0, 180, 255, 0.05);
+  border-radius: 0 6px 6px 0;
+}
+
+.markdown-body blockquote p {
+  margin: 0.25em 0;
+}
+
+/* 链接 */
+.markdown-body a {
+  color: #60b8ff;
+  text-decoration: none;
+}
+
+.markdown-body a:hover {
+  text-decoration: underline;
+}
+
+/* 分割线 */
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 1em 0;
+}
+
+/* 图片 */
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+/* 删除线 (GFM) */
+.markdown-body del {
+  color: #808090;
+}
+
+/* 任务列表 (GFM) */
+.markdown-body input[type="checkbox"] {
+  margin-right: 0.4em;
+  vertical-align: middle;
 }
