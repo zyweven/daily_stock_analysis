@@ -103,6 +103,7 @@ class ChatService:
     """
     
     def __init__(self):
+        """初始化对话服务，连接数据库并加载 Agent 服务。"""
         self._db = DatabaseManager.get_instance()
         self._agent_service = AgentService(self._db)
         
@@ -139,7 +140,14 @@ class ChatService:
             return result
             
     def delete_session(self, session_id: str) -> bool:
-        """删除会话（手动清理关联消息以绕过数据库外键限制）"""
+        """从数据库中彻底删除会话及其关联的消息。
+
+        Args:
+            session_id: 要删除的会话唯一标识符。
+
+        Returns:
+            bool: 删除成功返回 True，否则返回 False。
+        """
         try:
             with self._db.get_session() as session:
                 chat_session = session.query(ChatSession).get(session_id)
@@ -178,11 +186,20 @@ class ChatService:
             session.commit()
             session.refresh(chat_session)
             return chat_session.to_dict()
-    
-    def _create_session(self, stock_code: Optional[str] = None, 
+
+    def _create_session(self, stock_code: Optional[str] = None,
                         model_name: Optional[str] = None,
                         agent_id: Optional[str] = None) -> str:
-        """创建新会话，返回 session_id"""
+        """创建新的对话会话并初始化 Agent 配置。
+
+        Args:
+            stock_code: 关联的股票代码。
+            model_name: 使用的模型名称。
+            agent_id: 指定的 Agent ID。
+
+        Returns:
+            str: 生成的 session_id。
+        """
         session_id = str(uuid.uuid4())
         
         # 获取 Agent 配置 (指定 Agent 或默认)
@@ -283,13 +300,31 @@ class ChatService:
             
             return result
 
-    def _get_session_config(self, session_id: str) -> Dict[str, Any]:
-        """获取会话的 Agent 配置"""
-        with self._db.get_session() as session:
-            chat_session = session.query(ChatSession).get(session_id)
             if chat_session and chat_session.current_agent_config:
                 return json.loads(chat_session.current_agent_config)
         return {}
+
+    def _prepare_openai_messages(self, session_id: str, user_message: str) -> List[Dict[str, Any]]:
+        """
+        [Sequential Thinking: Step 1 Result]
+        准备发送给 OpenAI 的完整消息列表，包括 System Prompt、历史记录和当前消息。
+        """
+        history = self._get_history_messages(session_id)
+        if not (history and history[-1].get('content') == user_message):
+            history.append({"role": "user", "content": user_message})
+
+        session_config = self._get_session_config(session_id)
+        if not session_config:
+            default_agent = self._agent_service.get_default_agent()
+            session_config = {
+                "system_prompt": default_agent.system_prompt if default_agent else "You are a helpful assistant.",
+                "enabled_tools": json.loads(default_agent.enabled_tools) if default_agent else []
+            }
+
+        return [
+            {"role": "system", "content": session_config.get("system_prompt", "You are a helpful assistant.")},
+            *history
+        ]
 
     # ==========================================
     # 流式对话核心
@@ -346,36 +381,15 @@ class ChatService:
         if update_kwargs:
             self.update_session(session_id, **update_kwargs)
         
-        # 5. 构建 OpenAI 消息列表
-        history = self._get_history_messages(session_id)
-        # 用最新消息替换（历史中可能还没有刚保存的）
-        if history and history[-1].get('content') == message:
-            pass  # 已包含
-        else:
-            history.append({"role": "user", "content": message})
+        # 5. 构建 OpenAI 消息列表 (Sequential Thinking 重构)
+        openai_messages = self._prepare_openai_messages(session_id, message)
         
-        # 获取最新的会话配置（System Prompt 和 Tools）
+        # 获取工具配置
         session_config = self._get_session_config(session_id)
-        if not session_config:
-             # 如果是旧会话没有 config，尝试迁移或使用默认
-             default_agent = self._agent_service.get_default_agent()
-             session_config = {
-                "system_prompt": default_agent.system_prompt if default_agent else "You are a helpful assistant.",
-                "enabled_tools": json.loads(default_agent.enabled_tools) if default_agent else []
-             }
-
-        system_prompt = session_config.get("system_prompt", "You are a helpful assistant.")
         enabled_tool_names = session_config.get("enabled_tools", [])
-
-        # 动态筛选可用工具
         active_tools = [
             t for t in ToolRegistry.get_all_tools() 
             if t['function']['name'] in enabled_tool_names
-        ]
-
-        openai_messages = [
-            {"role": "system", "content": system_prompt},
-            *history
         ]
         
         # 6. 初始化 OpenAI 客户端

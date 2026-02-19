@@ -47,36 +47,28 @@ class StockService:
             quote = manager.get_realtime_quote(stock_code)
             
             if quote is None:
-                logger.warning(f"获取 {stock_code} 实时行情失败")
-                return None
+                logger.warning(f"获取 {stock_code} 实时行情失败: 数据获取器返回 None")
+                return self._get_placeholder_quote(stock_code)
             
-            # UnifiedRealtimeQuote 是 dataclass，使用 getattr 安全访问字段
-            # 字段映射: UnifiedRealtimeQuote -> API 响应
-            # - code -> stock_code
-            # - name -> stock_name
-            # - price -> current_price
-            # - change_amount -> change
-            # - change_pct -> change_percent
-            # - open_price -> open
-            # - high -> high
-            # - low -> low
-            # - pre_close -> prev_close
-            # - volume -> volume
-            # - amount -> amount
+            # Defensive Pythonist: 严格校验字段并提供降级默认值
+            def safe_get(obj, attr, default=None):
+                val = getattr(obj, attr, default)
+                return val if val is not None else default
+
             return {
-                "stock_code": getattr(quote, "code", stock_code),
-                "stock_name": getattr(quote, "name", None),
-                "current_price": getattr(quote, "price", 0.0) or 0.0,
-                "change": getattr(quote, "change_amount", None),
-                "change_percent": getattr(quote, "change_pct", None),
-                "open": getattr(quote, "open_price", None),
-                "high": getattr(quote, "high", None),
-                "low": getattr(quote, "low", None),
-                "prev_close": getattr(quote, "pre_close", None),
-                "volume": getattr(quote, "volume", None),
-                "amount": getattr(quote, "amount", None),
-                "industry": getattr(quote, "industry", None),
-                "area": getattr(quote, "area", None),
+                "stock_code": safe_get(quote, "code", stock_code),
+                "stock_name": safe_get(quote, "name", "未知股票"),
+                "current_price": float(safe_get(quote, "price", 0.0)),
+                "change": safe_get(quote, "change_amount", 0.0),
+                "change_percent": safe_get(quote, "change_pct", 0.0),
+                "open": safe_get(quote, "open_price", 0.0),
+                "high": safe_get(quote, "high", 0.0),
+                "low": safe_get(quote, "low", 0.0),
+                "prev_close": safe_get(quote, "pre_close", 0.0),
+                "volume": safe_get(quote, "volume", 0),
+                "amount": safe_get(quote, "amount", 0.0),
+                "industry": safe_get(quote, "industry", "-"),
+                "area": safe_get(quote, "area", "-"),
                 "update_time": datetime.now().isoformat(),
             }
             
