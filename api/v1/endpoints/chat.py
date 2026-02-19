@@ -11,7 +11,7 @@ AI 对话接口
 
 import json
 import logging
-from typing import Optional
+from typing import Optional, List
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -32,12 +32,15 @@ class ChatSendRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=5000, description="用户消息")
     stock_code: Optional[str] = Field(None, description="关联股票代码")
     model_name: Optional[str] = Field(None, description="指定模型名称")
+    agent_id: Optional[str] = Field(None, description="指定 Agent ID（仅新建会话有效）")
+    tools: Optional[List[str]] = Field(None, description="运行时启用的工具列表（覆盖默认配置）")
 
 
 class SessionUpdateRequest(BaseModel):
     """更新会话请求"""
     title: Optional[str] = Field(None, max_length=200, description="会话标题")
     stock_code: Optional[str] = Field(None, description="关联股票代码")
+    current_agent_config: Optional[dict] = Field(None, description="更新会话的 Agent 配置")
 
 
 # === SSE 流式对话 ===
@@ -65,6 +68,8 @@ async def chat_send(request: ChatSendRequest):
                 session_id=request.session_id,
                 stock_code=request.stock_code,
                 model_name=request.model_name,
+                agent_id=request.agent_id,
+                tools=request.tools
             ):
                 event_type = event.get("event", "message")
                 data = json.dumps(event.get("data", {}), ensure_ascii=False)

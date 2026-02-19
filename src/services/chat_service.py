@@ -22,6 +22,8 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Generator
 from src.config import get_config
 from src.storage import DatabaseManager, ChatSession, ChatMessage
 from src.services.chat_tools import CHAT_TOOLS, execute_tool
+from src.services.agent_service import AgentService
+from src.services.tool_registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -96,11 +98,14 @@ def _sanitize_tool_args(raw_args: str) -> str:
 
 
 class ChatService:
-    """AI 对话服务"""
+    """
+    AI 对话服务
+    """
     
     def __init__(self):
-        self._db = DatabaseManager()
-    
+        self._db = DatabaseManager.get_instance()
+        self._agent_service = AgentService(self._db)
+        
     # ==========================================
     # 会话管理
     # ==========================================
@@ -108,55 +113,100 @@ class ChatService:
     def get_sessions(self, limit: int = 50, offset: int = 0) -> List[Dict[str, Any]]:
         """获取会话列表（按更新时间倒序）"""
         with self._db.get_session() as session:
-            query = session.query(ChatSession)\
+            sessions = session.query(ChatSession)\
                 .order_by(ChatSession.updated_at.desc())\
+                .limit(limit)\
                 .offset(offset)\
-                .limit(limit)
-            return [s.to_dict() for s in query.all()]
-    
-    def get_session_detail(self, session_id: str) -> Optional[Dict[str, Any]]:
+                .all()
+            return [s.to_dict() for s in sessions]
+            
+    def get_session_detail(self, session_id: str) -> Dict[str, Any]:
         """获取会话详情（含消息列表）"""
         with self._db.get_session() as session:
             chat_session = session.query(ChatSession).get(session_id)
             if not chat_session:
-                return None
+                return {}
             
+            result = chat_session.to_dict()
+            
+            # 获取消息列表
             messages = session.query(ChatMessage)\
                 .filter(ChatMessage.session_id == session_id)\
                 .order_by(ChatMessage.created_at.asc())\
                 .all()
             
-            result = chat_session.to_dict()
-            result['messages'] = [m.to_dict() for m in messages]
+            result['messages'] = [msg.to_dict() for msg in messages]
             return result
-    
+            
     def delete_session(self, session_id: str) -> bool:
-        """删除会话（CASCADE 自动清理消息）"""
-        with self._db.get_session() as session:
-            chat_session = session.query(ChatSession).get(session_id)
-            if not chat_session:
-                return False
-            session.delete(chat_session)
-            session.commit()
-            return True
-    
-    def update_session(self, session_id: str, **kwargs) -> Optional[Dict[str, Any]]:
+        """删除会话（手动清理关联消息以绕过数据库外键限制）"""
+        try:
+            with self._db.get_session() as session:
+                chat_session = session.query(ChatSession).get(session_id)
+                if not chat_session:
+                    logger.warning(f"删除会话失败：会话 {session_id} 不存在")
+                    return False
+                
+                # 1. 显式删除关联的消息（解决级联删除无效的问题）
+                deleted_msgs = session.query(ChatMessage).filter(ChatMessage.session_id == session_id).delete()
+                logger.info(f"会话 {session_id} 下的 {deleted_msgs} 条消息已清理")
+                
+                # 2. 删除会话对象
+                session.delete(chat_session)
+                session.commit()
+                logger.info(f"会话 {session_id} 已彻底删除")
+                return True
+        except Exception as e:
+            logger.error(f"删除会话 {session_id} 时发生错误: {e}")
+            return False
+
+    def update_session(self, session_id: str, **kwargs) -> Dict[str, Any]:
         """更新会话信息"""
         with self._db.get_session() as session:
             chat_session = session.query(ChatSession).get(session_id)
             if not chat_session:
-                return None
+                return {}
+            
             for key, value in kwargs.items():
-                if hasattr(chat_session, key) and key not in ('id', 'created_at'):
+                if hasattr(chat_session, key) and key not in ('id', 'created_at', 'current_agent_config'):
                     setattr(chat_session, key, value)
+                
+                # 特殊处理 current_agent_config JSON 字段
+                if key == 'current_agent_config' and isinstance(value, dict):
+                     setattr(chat_session, 'current_agent_config', json.dumps(value))
+
             session.commit()
             session.refresh(chat_session)
             return chat_session.to_dict()
     
     def _create_session(self, stock_code: Optional[str] = None, 
-                        model_name: Optional[str] = None) -> str:
+                        model_name: Optional[str] = None,
+                        agent_id: Optional[str] = None) -> str:
         """创建新会话，返回 session_id"""
         session_id = str(uuid.uuid4())
+        
+        # 获取 Agent 配置 (指定 Agent 或默认)
+        if agent_id:
+            agent = self._agent_service.get_agent(agent_id)
+        else:
+            agent = self._agent_service.get_default_agent()
+            
+        # 如果连默认 Agent 都没有（理论上 _ensure_default_agent 保证了会有），则使用空配置防止报错
+        # 但我们还是 log warning
+        if not agent:
+             logger.error("创建会话失败：未找到任何可用 Agent")
+             # Fallback logic could go here, but let's assume agent exists
+        
+        # 构建会话级配置快照
+        current_config = {}
+        if agent:
+            current_config = {
+                "name": agent.name,
+                "system_prompt": agent.system_prompt,
+                "enabled_tools": json.loads(agent.enabled_tools) if agent.enabled_tools else [],
+                "model_config": json.loads(agent.model_config) if agent.model_config else {}
+            }
+
         with self._db.get_session() as session:
             chat_session = ChatSession(
                 id=session_id,
@@ -164,6 +214,8 @@ class ChatService:
                 stock_code=stock_code,
                 model_name=model_name,
                 message_count=0,
+                agent_id=agent.id if agent else None,
+                current_agent_config=json.dumps(current_config) if current_config else None
             )
             session.add(chat_session)
             session.commit()
@@ -231,6 +283,14 @@ class ChatService:
             
             return result
 
+    def _get_session_config(self, session_id: str) -> Dict[str, Any]:
+        """获取会话的 Agent 配置"""
+        with self._db.get_session() as session:
+            chat_session = session.query(ChatSession).get(session_id)
+            if chat_session and chat_session.current_agent_config:
+                return json.loads(chat_session.current_agent_config)
+        return {}
+
     # ==========================================
     # 流式对话核心
     # ==========================================
@@ -238,9 +298,14 @@ class ChatService:
     def stream_chat(self, message: str,
                     session_id: Optional[str] = None,
                     stock_code: Optional[str] = None,
-                    model_name: Optional[str] = None) -> Generator[Dict[str, Any], None, None]:
+                    model_name: Optional[str] = None,
+                    agent_id: Optional[str] = None,
+                    tools: Optional[List[str]] = None) -> Generator[Dict[str, Any], None, None]:
         """
         流式对话（同步 Generator）
+        
+        Args:
+            tools: 运行时覆盖的工具列表（如果提供，将更新 session 配置）
         
         Yields:
             SSE 事件字典: {"event": "...", "data": {...}}
@@ -250,9 +315,19 @@ class ChatService:
         # 1. 创建或获取会话
         is_new_session = False
         if not session_id:
-            session_id = self._create_session(stock_code, model_name)
+            session_id = self._create_session(stock_code, model_name, agent_id)
             is_new_session = True
         
+        # 运行时工具更新：如果提供了 tools 参数，更新会话配置
+        if tools is not None:
+            # 只有当 tools 真的改变时才写入 DB，避免每次都写? 
+            # 简单起见，这里假设前端只有在 explicit change 时才传
+            # 或者我们可以每次都检查。为简单可靠，这里先读取再更新
+            current_config = self._get_session_config(session_id)
+            if set(current_config.get('enabled_tools', [])) != set(tools):
+                current_config['enabled_tools'] = tools
+                self.update_session(session_id, current_agent_config=current_config)
+
         yield {"event": "session", "data": {"session_id": session_id, "is_new": is_new_session}}
         
         # 2. 保存用户消息
@@ -279,8 +354,27 @@ class ChatService:
         else:
             history.append({"role": "user", "content": message})
         
+        # 获取最新的会话配置（System Prompt 和 Tools）
+        session_config = self._get_session_config(session_id)
+        if not session_config:
+             # 如果是旧会话没有 config，尝试迁移或使用默认
+             default_agent = self._agent_service.get_default_agent()
+             session_config = {
+                "system_prompt": default_agent.system_prompt if default_agent else "You are a helpful assistant.",
+                "enabled_tools": json.loads(default_agent.enabled_tools) if default_agent else []
+             }
+
+        system_prompt = session_config.get("system_prompt", "You are a helpful assistant.")
+        enabled_tool_names = session_config.get("enabled_tools", [])
+
+        # 动态筛选可用工具
+        active_tools = [
+            t for t in ToolRegistry.get_all_tools() 
+            if t['function']['name'] in enabled_tool_names
+        ]
+
         openai_messages = [
-            {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             *history
         ]
         
@@ -297,7 +391,7 @@ class ChatService:
         
         for round_idx in range(MAX_TOOL_ROUNDS + 1):
             try:
-                use_tools = round_idx < MAX_TOOL_ROUNDS
+                use_tools = (round_idx < MAX_TOOL_ROUNDS) and (len(active_tools) > 0)
                 
                 if use_tools:
                     # 工具调用轮次：使用非流式调用，避免部分提供商参数粘连 bug
@@ -362,7 +456,7 @@ class ChatService:
                             # 通知前端工具结果
                             yield {"event": "tool_result", "data": {
                                 "name": tool_name,
-                                "result": tool_result[:500]
+                                "result": tool_result[:2000]
                             }}
                             
                             # 将工具结果加入 messages

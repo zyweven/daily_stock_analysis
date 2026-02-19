@@ -246,22 +246,38 @@ def _exec_get_latest_report(stock_code: str) -> str:
 def _exec_search_news(query: str) -> str:
     """搜索新闻"""
     try:
-        from src.search_service import SearchService
-        search_svc = SearchService()
-        result = search_svc.search(query)
+        from src.search_service import get_search_service
+        search_svc = get_search_service()
         
-        if result and result.results:
-            news_list = []
-            for item in result.results[:5]:  # 最多返回5条
-                news_list.append({
-                    "title": item.title,
-                    "snippet": item.snippet,
-                    "url": item.url,
-                    "source": item.source,
-                })
-            return json.dumps({"query": query, "results": news_list}, ensure_ascii=False)
+        if not search_svc.is_available:
+            return json.dumps({"error": "未配置任何搜索引擎 API Key，请在环境变量中配置 SERPAPI_KEY / TAVILY_KEY / BOCHA_KEY 等"}, ensure_ascii=False)
         
-        return json.dumps({"query": query, "results": [], "message": "未找到相关新闻"}, ensure_ascii=False)
+        # 遍历可用的搜索引擎 provider，依次尝试
+        for provider in search_svc._providers:
+            if not provider.is_available:
+                continue
+            
+            result = provider.search(query, max_results=5, days=7)
+            
+            if result.success and result.results:
+                news_list = []
+                for item in result.results[:5]:
+                    news_list.append({
+                        "title": item.title,
+                        "snippet": item.snippet,
+                        "url": item.url,
+                        "source": item.source,
+                        "published_date": item.published_date,
+                    })
+                return json.dumps({
+                    "query": query, 
+                    "provider": result.provider,
+                    "results": news_list
+                }, ensure_ascii=False)
+            else:
+                logger.warning(f"[新闻搜索] {provider.name} 搜索失败: {result.error_message}，尝试下一个")
+        
+        return json.dumps({"query": query, "results": [], "message": "所有搜索引擎均未找到相关结果"}, ensure_ascii=False)
     except Exception as e:
         logger.warning(f"[新闻搜索] '{query}' 搜索失败: {e}")
         return json.dumps({"error": f"新闻搜索失败: {str(e)}"}, ensure_ascii=False)

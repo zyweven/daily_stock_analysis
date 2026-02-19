@@ -9,4 +9,10 @@ const apiClient = axios.create({
   },
 });
 
+// Re-export specific APIs
+export * from './agents';
+export * from './tools';
+export * from './chat';
+// Add others if needed or just specific ones
+
 export default apiClient;

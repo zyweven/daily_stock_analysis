@@ -74,6 +74,45 @@ class SystemConfig(Base):
     def __repr__(self):
         return f"<SystemConfig(key={self.key}, value={self.value[:30]}...)>"
 
+
+class AgentProfile(Base):
+    """
+    Agent 配置档案
+    
+    定义 Agent 的核心行为参数，用于从单一工具升级为多 Agent 平台。
+    """
+    __tablename__ = 'agent_profile'
+    
+    id = Column(String(36), primary_key=True)        # UUID
+    name = Column(String(100), nullable=False)       # Agent 名称
+    description = Column(String(500))                # 描述
+    
+    # 核心配置
+    system_prompt = Column(Text)                     # 系统提示词模板
+    enabled_tools = Column(Text, default='[]')       # JSON List: 默认启用的工具列表
+    model_config = Column(Text, default='{}')        # JSON Dict: 模型参数 (temperature, etc)
+    
+    # 状态
+    is_default = Column(Boolean, default=False)      # 是否为默认 Agent
+    is_system = Column(Boolean, default=False)       # 是否为系统预置（不可删除）
+    
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'system_prompt': self.system_prompt,
+            'enabled_tools': json.loads(self.enabled_tools) if self.enabled_tools else [],
+            'model_config': json.loads(self.model_config) if self.model_config else {},
+            'is_default': self.is_default,
+            'is_system': self.is_system,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
 class StockDaily(Base):
     """
     股票日线数据模型
@@ -209,6 +248,10 @@ class ChatSession(Base):
     model_name = Column(String(100), nullable=True)   # 使用的模型名称
     message_count = Column(Integer, default=0)        # 消息计数
     
+    # Agent 关联与配置快照
+    agent_id = Column(String(36), ForeignKey('agent_profile.id'), nullable=True)
+    current_agent_config = Column(Text, nullable=True) # JSON: 当前会话生效的 Agent 配置（支持会话级覆盖）
+    
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
     
@@ -228,6 +271,8 @@ class ChatSession(Base):
             'stock_code': self.stock_code,
             'model_name': self.model_name,
             'message_count': self.message_count,
+            'agent_id': self.agent_id,
+            'current_agent_config': json.loads(self.current_agent_config) if self.current_agent_config else None,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -193,7 +193,7 @@ class StockInfoResponse(BaseModel):
     updated_at: Optional[str] = None
 
 class CreateStockRequest(BaseModel):
-    code: str = Field(..., description="股票代码", min_length=5, max_length=10)
+    code: str = Field(..., description="股票代码", min_length=1, max_length=10)
     name: Optional[str] = Field(None, description="股票名称（可选，自动获取）")
     tags: List[str] = Field(default_factory=list, description="标签")
     remark: Optional[str] = Field("", description="备注")

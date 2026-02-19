@@ -10,6 +10,8 @@ export interface ChatSession {
     stockCode: string | null;
     modelName: string | null;
     messageCount: number;
+    agentId: string | null;
+    currentAgentConfig: string | null; // JSON string
     createdAt: string | null;
     updatedAt: string | null;
 }
@@ -36,6 +38,7 @@ export interface ChatSendRequest {
     message: string;
     stock_code?: string;
     model_name?: string;
+    agent_id?: string;
 }
 
 // SSE 事件类型

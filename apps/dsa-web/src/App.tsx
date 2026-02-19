@@ -6,7 +6,9 @@ import SettingsPage from './pages/SettingsPage';
 import ExpertPanelPage from './pages/ExpertPanelPage';
 import StockManagementPage from './pages/StockManagementPage';
 import ChatPage from './pages/ChatPage';
+import AgentSettingsPage from './pages/AgentSettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
+import { Toaster } from 'react-hot-toast';
 import './App.css';
 
 // 侧边导航图标
@@ -138,6 +140,7 @@ const DockNav: React.FC = () => {
 const App: React.FC = () => {
     return (
         <Router>
+            <Toaster position="top-right" />
             <div className="flex min-h-screen bg-base">
                 {/* Dock 导航 */}
                 <DockNav />
@@ -150,7 +153,9 @@ const App: React.FC = () => {
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/expert-panel" element={<ExpertPanelPage />} />
                         <Route path="/stocks" element={<StockManagementPage />} />
+                        <Route path="/stocks" element={<StockManagementPage />} />
                         <Route path="/chat" element={<ChatPage />} />
+                        <Route path="/agents" element={<AgentSettingsPage />} />
                         <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                 </main>
