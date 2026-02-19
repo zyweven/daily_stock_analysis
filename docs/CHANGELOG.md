@@ -8,6 +8,12 @@
 ## [Unreleased]
 
 ### 新增
+- 🎯 **Skill 技能系统前端集成**
+  - 新增技能库页面 (`/skills`)，支持分类筛选、技能详情查看、组合预览
+  - Agent 配置页集成技能选择器，支持启用/停用技能、自定义提示词覆盖
+  - 实时预览组合后的 system_prompt、工具列表、预估 tokens
+  - 技能模板应用：一键将预设模板（日内交易/价值投资/新闻驱动）应用到指定 Agent
+  - 用户自定义技能 CRUD（创建/编辑/删除），内置技能只读
 - 📷 **Markdown 转图片** (Issue #289)
   - 支持 `MARKDOWN_TO_IMAGE_CHANNELS` 配置，对 Telegram、企业微信、自定义 Webhook（Discord）、邮件以图片形式发送报告
   - 邮件为内联附件，增强对不支持 HTML 客户端的兼容性

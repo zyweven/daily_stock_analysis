@@ -11,11 +11,11 @@
   - 行宽 120
   - `black` + `isort` + `flake8`
   - 关键变更需至少做语法检查（`py_compile`）或对应测试验证。
-  - 新增或修改的代码注释必须使用英文。
+  - 新增或修改的代码注释必须使用中文。
 - Git 约束：
   - 未经明确确认，不执行 `git commit`。
   - commit message 不添加 `Co-Authored-By`。
-  - 后续所有 commit message 必须使用英文。
+  - 后续所有 commit message 必须使用中文。
 
 ## 2. Issue 分析原则
 

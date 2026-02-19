@@ -17,6 +17,7 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy import select, desc
 from src.storage import DatabaseManager, AgentProfile
 from src.services.tool_registry import ToolRegistry
+from src.services.skill_service import SkillService
 
 logger = logging.getLogger(__name__)
 
@@ -31,34 +32,54 @@ DEFAULT_SYSTEM_PROMPT = """你是一个专业的股票分析师助手，旨在�
 
 如果用户询问无法通过工具解答的问题，请诚实告知无法回答。"""
 
+# Default skills for the default agent
+DEFAULT_AGENT_SKILLS = [
+    "stock_technical_analysis",
+    "stock_news_research",
+    "stock_chip_analysis",
+    "stock_risk_management",
+]
+
 class AgentService:
     def __init__(self, db_manager: Optional[DatabaseManager] = None):
         self.db = db_manager or DatabaseManager.get_instance()
         self._ensure_default_agent()
 
     def _ensure_default_agent(self):
-        """确保存在默认 Agent"""
+        """Ensure default Agent exists with default skills."""
         with self.db.get_session() as session:
             stmt = select(AgentProfile).where(AgentProfile.is_default == True)
             existing = session.execute(stmt).scalars().first()
-            
+
             if not existing:
-                logger.info("初始化默认 Agent: 股票分析师")
-                # 获取所有可用工具作为默认配置
-                all_tools = [t["function"]["name"] for t in ToolRegistry.get_all_tools()]
-                
+                logger.info("Initializing default Agent: 股票分析师")
+
                 default_agent = AgentProfile(
                     id=str(uuid.uuid4()),
                     name=DEFAULT_AGENT_NAME,
                     description="系统默认的股票分析助手，集成了全套分析工具。",
                     system_prompt=DEFAULT_SYSTEM_PROMPT,
-                    enabled_tools=json.dumps(all_tools),
+                    manual_tools=json.dumps([]),
                     model_config=json.dumps({"temperature": 0.5}),
                     is_default=True,
                     is_system=True
                 )
                 session.add(default_agent)
                 session.commit()
+                session.refresh(default_agent)
+
+                # Bind default skills
+                skill_svc = SkillService(self.db)
+                for skill_id in DEFAULT_AGENT_SKILLS:
+                    try:
+                        skill_svc.bind_skill_to_agent(
+                            agent_id=default_agent.id,
+                            skill_id=skill_id,
+                            is_enabled=True
+                        )
+                        logger.info(f"  Bound skill: {skill_id}")
+                    except ValueError as e:
+                        logger.warning(f"  Could not bind skill {skill_id}: {e}")
 
     def get_agent(self, agent_id: str) -> Optional[AgentProfile]:
         """获取指定 Agent"""
@@ -77,22 +98,40 @@ class AgentService:
             stmt = select(AgentProfile).order_by(desc(AgentProfile.is_default), desc(AgentProfile.updated_at))
             return session.execute(stmt).scalars().all()
 
-    def create_agent(self, name: str, system_prompt: str, description: str = "", 
-                    enabled_tools: List[str] = None, model_config: Dict = None) -> AgentProfile:
-        """创建新 Agent"""
-        enabled_tools = enabled_tools or []
+    def create_agent(
+        self,
+        name: str,
+        system_prompt: str,
+        description: str = "",
+        manual_tools: List[str] = None,
+        model_config: Dict = None,
+        skill_ids: List[str] = None,
+    ) -> AgentProfile:
+        """
+        Create a new Agent.
+
+        Args:
+            name: Agent name
+            system_prompt: Base system prompt (personality/identity)
+            description: Agent description
+            manual_tools: Additional tools not provided by skills
+            model_config: Model parameters (temperature, etc.)
+            skill_ids: Skill IDs to bind to this agent
+        """
+        manual_tools = manual_tools or []
         model_config = model_config or {}
-        
-        # 验证工具名
-        valid_tools = ToolRegistry.validate_tools(enabled_tools)
-        
+        skill_ids = skill_ids or []
+
+        # Validate tool names
+        valid_tools = ToolRegistry.validate_tools(manual_tools)
+
         with self.db.get_session() as session:
             agent = AgentProfile(
                 id=str(uuid.uuid4()),
                 name=name,
                 description=description,
                 system_prompt=system_prompt,
-                enabled_tools=json.dumps(valid_tools),
+                manual_tools=json.dumps(valid_tools),
                 model_config=json.dumps(model_config),
                 is_default=False,
                 is_system=False
@@ -100,17 +139,31 @@ class AgentService:
             session.add(agent)
             session.commit()
             session.refresh(agent)
+
+            # Bind skills if provided
+            if skill_ids:
+                skill_svc = SkillService(self.db)
+                for skill_id in skill_ids:
+                    try:
+                        skill_svc.bind_skill_to_agent(
+                            agent_id=agent.id,
+                            skill_id=skill_id,
+                            is_enabled=True
+                        )
+                    except ValueError as e:
+                        logger.warning(f"Could not bind skill {skill_id}: {e}")
+
             return agent
 
     def update_agent(self, agent_id: str, **kwargs) -> Optional[AgentProfile]:
-        """更新 Agent"""
+        """Update Agent"""
         with self.db.get_session() as session:
             agent = session.get(AgentProfile, agent_id)
             if not agent:
                 return None
-            
+
             if agent.is_system:
-                # 系统 Agent 只允许修改部分字段? 目前暂不限制，为了灵活性
+                # System agents allow limited modifications
                 pass
 
             if "name" in kwargs:
@@ -119,27 +172,76 @@ class AgentService:
                 agent.description = kwargs["description"]
             if "system_prompt" in kwargs:
                 agent.system_prompt = kwargs["system_prompt"]
+            if "manual_tools" in kwargs:
+                valid_tools = ToolRegistry.validate_tools(kwargs["manual_tools"])
+                agent.manual_tools = json.dumps(valid_tools)
+            # Backward compatibility
             if "enabled_tools" in kwargs:
                 valid_tools = ToolRegistry.validate_tools(kwargs["enabled_tools"])
-                agent.enabled_tools = json.dumps(valid_tools)
+                agent.manual_tools = json.dumps(valid_tools)
             if "model_config" in kwargs:
                 agent.model_config = json.dumps(kwargs["model_config"])
-            
+
             session.commit()
             session.refresh(agent)
             return agent
 
     def delete_agent(self, agent_id: str) -> bool:
-        """删除 Agent"""
+        """Delete Agent"""
         with self.db.get_session() as session:
             agent = session.get(AgentProfile, agent_id)
             if not agent:
                 return False
-            
+
             if agent.is_system:
-                logger.warning(f"尝试删除系统 Agent {agent.name} 被拒绝")
+                logger.warning(f"Attempt to delete system Agent {agent.name} rejected")
                 return False
-                
+
+            # Delete associated skill bindings first
+            from src.storage import AgentSkill
+            bindings = session.execute(
+                select(AgentSkill).where(AgentSkill.agent_id == agent_id)
+            ).scalars().all()
+            for binding in bindings:
+                session.delete(binding)
+
             session.delete(agent)
             session.commit()
             return True
+
+    def get_agent_full_config(self, agent_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get the full runtime configuration for an Agent.
+
+        This combines:
+        1. Agent's base identity (name, description, system_prompt)
+        2. Skills (capabilities and tool usage guides)
+        3. Manual tools (additional tools beyond skills)
+        4. Model configuration
+
+        Returns:
+            Full configuration dict for runtime use, or None if agent not found
+        """
+        with self.db.get_session() as session:
+            agent = session.get(AgentProfile, agent_id)
+            if not agent:
+                return None
+
+            # Use SkillService to apply skills
+            skill_svc = SkillService(self.db)
+            skill_config = skill_svc.apply_skills_to_agent(agent)
+
+            # Get agent's bound skills for metadata
+            agent_skills = skill_svc.get_agent_skills(agent_id, only_enabled=True)
+
+            return {
+                "agent_id": agent_id,
+                "name": agent.name,
+                "description": agent.description,
+                "system_prompt": skill_config["system_prompt"],
+                "enabled_tools": skill_config["enabled_tools"],
+                "skills": agent_skills,
+                "model_config": json.loads(agent.model_config) if agent.model_config else {},
+                "is_default": agent.is_default,
+                "is_system": agent.is_system,
+            }

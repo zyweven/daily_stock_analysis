@@ -13,6 +13,7 @@ const apiClient = axios.create({
 export * from './agents';
 export * from './tools';
 export * from './chat';
+export * from './skills';
 // Add others if needed or just specific ones
 
 export default apiClient;

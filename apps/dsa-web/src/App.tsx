@@ -7,6 +7,7 @@ import ExpertPanelPage from './pages/ExpertPanelPage';
 import StockManagementPage from './pages/StockManagementPage';
 import ChatPage from './pages/ChatPage';
 import AgentSettingsPage from './pages/AgentSettingsPage';
+import SkillLibraryPage from './pages/SkillLibraryPage';
 import NotFoundPage from './pages/NotFoundPage';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -55,6 +56,13 @@ const ChatIcon: React.FC<{ active?: boolean }> = ({ active }) => (
     </svg>
 );
 
+const SkillIcon: React.FC<{ active?: boolean }> = ({ active }) => (
+    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 2 : 1.5}
+            d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+);
+
 type DockItem = {
     key: string;
     label: string;
@@ -98,6 +106,12 @@ const NAV_ITEMS: DockItem[] = [
         label: 'AI',
         to: '/chat',
         icon: ChatIcon,
+    },
+    {
+        key: 'skills',
+        label: '技能',
+        to: '/skills',
+        icon: SkillIcon,
     },
 ];
 
@@ -156,6 +170,7 @@ const App: React.FC = () => {
                         <Route path="/stocks" element={<StockManagementPage />} />
                         <Route path="/chat" element={<ChatPage />} />
                         <Route path="/agents" element={<AgentSettingsPage />} />
+                        <Route path="/skills" element={<SkillLibraryPage />} />
                         <Route path="*" element={<NotFoundPage />} />
                     </Routes>
                 </main>

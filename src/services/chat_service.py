@@ -21,9 +21,11 @@ from typing import Any, AsyncGenerator, Dict, List, Optional, Generator
 
 from src.config import get_config
 from src.storage import DatabaseManager, ChatSession, ChatMessage
-from src.services.chat_tools import CHAT_TOOLS, execute_tool
 from src.services.agent_service import AgentService
 from src.services.tool_registry import ToolRegistry
+# Import chat_tools to trigger @tool decorator registration
+# noinspection PyUnresolvedReferences
+from src.services import chat_tools
 
 logger = logging.getLogger(__name__)
 
@@ -190,49 +192,60 @@ class ChatService:
     def _create_session(self, stock_code: Optional[str] = None,
                         model_name: Optional[str] = None,
                         agent_id: Optional[str] = None) -> str:
-        """创建新的对话会话并初始化 Agent 配置。
+        """Create a new chat session with Agent configuration.
 
         Args:
-            stock_code: 关联的股票代码。
-            model_name: 使用的模型名称。
-            agent_id: 指定的 Agent ID。
+            stock_code: Associated stock code.
+            model_name: Model to use.
+            agent_id: Specific Agent ID (uses default if not provided).
 
         Returns:
-            str: 生成的 session_id。
+            str: Generated session_id.
         """
         session_id = str(uuid.uuid4())
-        
-        # 获取 Agent 配置 (指定 Agent 或默认)
+
+        # Get Agent full configuration (including skills)
         if agent_id:
-            agent = self._agent_service.get_agent(agent_id)
+            agent_config = self._agent_service.get_agent_full_config(agent_id)
         else:
-            agent = self._agent_service.get_default_agent()
-            
-        # 如果连默认 Agent 都没有（理论上 _ensure_default_agent 保证了会有），则使用空配置防止报错
-        # 但我们还是 log warning
-        if not agent:
-             logger.error("创建会话失败：未找到任何可用 Agent")
-             # Fallback logic could go here, but let's assume agent exists
-        
-        # 构建会话级配置快照
-        current_config = {}
-        if agent:
-            current_config = {
-                "name": agent.name,
-                "system_prompt": agent.system_prompt,
-                "enabled_tools": json.loads(agent.enabled_tools) if agent.enabled_tools else [],
-                "model_config": json.loads(agent.model_config) if agent.model_config else {}
+            default_agent = self._agent_service.get_default_agent()
+            if default_agent:
+                agent_config = self._agent_service.get_agent_full_config(default_agent.id)
+            else:
+                agent_config = None
+
+        if not agent_config:
+            logger.error("Failed to create session: No available Agent")
+            # Fallback to basic config
+            agent_config = {
+                "name": "Default",
+                "system_prompt": "You are a helpful AI assistant.",
+                "enabled_tools": [],
+                "model_config": {},
+                "skills": [],
             }
+
+        # Extract agent ID from config
+        actual_agent_id = agent_config.get("agent_id") if agent_config else None
+
+        # Build session config snapshot
+        session_config = {
+            "name": agent_config.get("name", "Unknown"),
+            "system_prompt": agent_config.get("system_prompt", ""),
+            "enabled_tools": agent_config.get("enabled_tools", []),
+            "model_config": agent_config.get("model_config", {}),
+            "skills": [s.get("id") for s in agent_config.get("skills", [])],
+        }
 
         with self._db.get_session() as session:
             chat_session = ChatSession(
                 id=session_id,
-                title='新对话',
+                title='New Chat',
                 stock_code=stock_code,
                 model_name=model_name,
                 message_count=0,
-                agent_id=agent.id if agent else None,
-                current_agent_config=json.dumps(current_config) if current_config else None
+                agent_id=actual_agent_id,
+                current_agent_config=json.dumps(session_config)
             )
             session.add(chat_session)
             session.commit()
@@ -300,14 +313,27 @@ class ChatService:
             
             return result
 
+    def _get_session_config(self, session_id: str) -> Dict[str, Any]:
+        """
+        Get the Agent configuration for a session.
+
+        Returns:
+            Agent configuration dict with system_prompt and enabled_tools,
+            or empty dict if session not found.
+        """
+        with self._db.get_session() as session:
+            chat_session = session.query(ChatSession).get(session_id)
             if chat_session and chat_session.current_agent_config:
                 return json.loads(chat_session.current_agent_config)
         return {}
 
     def _prepare_openai_messages(self, session_id: str, user_message: str) -> List[Dict[str, Any]]:
         """
-        [Sequential Thinking: Step 1 Result]
-        准备发送给 OpenAI 的完整消息列表，包括 System Prompt、历史记录和当前消息。
+        Prepare OpenAI messages including System Prompt, history, and current message.
+
+        The system prompt is composed of:
+        1. Agent's base identity/personality
+        2. Skill prompt templates (how to use tools professionally)
         """
         history = self._get_history_messages(session_id)
         if not (history and history[-1].get('content') == user_message):
@@ -315,11 +341,19 @@ class ChatService:
 
         session_config = self._get_session_config(session_id)
         if not session_config:
+            # Fallback to default agent with full skill config
             default_agent = self._agent_service.get_default_agent()
-            session_config = {
-                "system_prompt": default_agent.system_prompt if default_agent else "You are a helpful assistant.",
-                "enabled_tools": json.loads(default_agent.enabled_tools) if default_agent else []
-            }
+            if default_agent:
+                full_config = self._agent_service.get_agent_full_config(default_agent.id)
+                session_config = {
+                    "system_prompt": full_config.get("system_prompt", "You are a helpful assistant."),
+                    "enabled_tools": full_config.get("enabled_tools", []),
+                }
+            else:
+                session_config = {
+                    "system_prompt": "You are a helpful AI assistant.",
+                    "enabled_tools": [],
+                }
 
         return [
             {"role": "system", "content": session_config.get("system_prompt", "You are a helpful assistant.")},
@@ -412,7 +446,7 @@ class ChatService:
                     response = client.chat.completions.create(
                         model=actual_model,
                         messages=openai_messages,
-                        tools=CHAT_TOOLS,
+                        tools=active_tools,
                         temperature=0.7,
                         stream=False,
                     )
@@ -457,8 +491,8 @@ class ChatService:
                                 "round": round_idx + 1
                             }}
                             
-                            # 执行工具
-                            tool_result = execute_tool(tool_name, tool_args)
+                            # Execute tool via registry
+                            tool_result = ToolRegistry.execute(tool_name, tool_args)
                             
                             # 保存工具调用和结果
                             self._save_message(session_id, 'tool_call', tool_name,

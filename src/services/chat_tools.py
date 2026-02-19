@@ -1,178 +1,81 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-AI 对话助手 - 投研工具定义与执行器
+AI Chat Assistant - Investment Research Tools
 ===================================
 
-定义 AI 可调用的投研工具（Function Calling 格式），
-并提供工具执行路由。
+Defines AI-callable research tools using @tool decorator.
+Tools are auto-registered to ToolRegistry.
+
+Usage:
+    Tools are automatically registered when this module is imported.
+    Use ToolRegistry.execute(tool_name, args) to execute any tool.
 """
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
+
+from src.services.tool_decorator import tool
 
 logger = logging.getLogger(__name__)
 
 
-# === OpenAI Function Calling 格式的工具定义 ===
-
-CHAT_TOOLS: List[Dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_realtime_quote",
-            "description": "获取指定股票的实时行情数据，包括最新价格、涨跌幅、成交量、换手率、市盈率、总市值等。当用户询问某只股票的当前价格、行情或市场表现时调用此工具。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "stock_code": {
-                        "type": "string",
-                        "description": "股票代码，如 A股: 601318, 600519; 港股: 01810, 00700; 美股: AAPL, TSLA"
-                    }
-                },
-                "required": ["stock_code"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_technical_summary",
-            "description": "获取指定股票的技术面分析摘要，包括最近60日K线走势、均线系统（MA5/MA10/MA20）、MACD信号、成交量变化趋势等。当用户询问技术分析、走势趋势、均线、MACD、KDJ等指标时调用此工具。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "stock_code": {
-                        "type": "string",
-                        "description": "股票代码"
-                    }
-                },
-                "required": ["stock_code"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_latest_report",
-            "description": "获取指定股票最近一次的 AI 分析报告摘要，包括趋势判断、操作建议、风险提示、情绪评分等。当用户询问之前的分析结果、历史报告或想回顾上次分析结论时调用此工具。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "stock_code": {
-                        "type": "string",
-                        "description": "股票代码"
-                    }
-                },
-                "required": ["stock_code"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_news",
-            "description": "搜索指定股票或关键词的最新新闻和公告。当用户询问某只股票的最新消息、利好利空、公告、行业动态时调用此工具。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {
-                        "type": "string",
-                        "description": "搜索关键词，例如 '小米集团 最新消息' 或 '新能源汽车 政策'"
-                    }
-                },
-                "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_chip_distribution",
-            "description": "获取指定股票的筹码分布数据，包括获利比例、平均成本、筹码集中度等。当用户询问筹码、套牢盘、获利盘、成本分布时调用此工具。仅支持 A 股。",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "stock_code": {
-                        "type": "string",
-                        "description": "A 股代码，如 601318"
-                    }
-                },
-                "required": ["stock_code"]
-            }
-        }
-    },
-]
-
-
-def execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> str:
+@tool()
+def get_realtime_quote(stock_code: str) -> str:
     """
-    执行工具调用并返回结果（JSON 字符串）
-    
+    Get real-time market quote data including latest price, change percentage,
+    volume, turnover rate, PE ratio, and market cap for a financial instrument.
+    Call this tool when user asks about current price, market performance,
+    or real-time quotes of a specific stock, ETF, or other tradable asset.
+
     Args:
-        tool_name: 工具名称
-        tool_args: 工具参数字典
-        
-    Returns:
-        JSON 格式的执行结果
+        stock_code: Asset symbol, e.g., A-share: 601318, 600519; HK: 01810, 00700; US: AAPL, TSLA
     """
-    try:
-        if tool_name == "get_realtime_quote":
-            return _exec_get_realtime_quote(tool_args.get("stock_code", ""))
-        elif tool_name == "get_technical_summary":
-            return _exec_get_technical_summary(tool_args.get("stock_code", ""))
-        elif tool_name == "get_latest_report":
-            return _exec_get_latest_report(tool_args.get("stock_code", ""))
-        elif tool_name == "search_news":
-            return _exec_search_news(tool_args.get("query", ""))
-        elif tool_name == "get_chip_distribution":
-            return _exec_get_chip_distribution(tool_args.get("stock_code", ""))
-        else:
-            return json.dumps({"error": f"未知工具: {tool_name}"}, ensure_ascii=False)
-    except Exception as e:
-        logger.error(f"[工具执行] {tool_name} 执行失败: {e}", exc_info=True)
-        return json.dumps({"error": f"工具执行失败: {str(e)}"}, ensure_ascii=False)
-
-
-# === 工具执行实现 ===
-
-def _exec_get_realtime_quote(stock_code: str) -> str:
-    """获取实时行情"""
     from src.services.stock_service import StockService
     svc = StockService()
     quote = svc.get_realtime_quote(stock_code)
     if quote:
         return json.dumps(quote, ensure_ascii=False)
-    return json.dumps({"error": f"未能获取 {stock_code} 的实时行情"}, ensure_ascii=False)
+    return json.dumps({"error": f"Failed to get real-time quote for {stock_code}"}, ensure_ascii=False)
 
 
-def _exec_get_technical_summary(stock_code: str) -> str:
-    """获取技术面摘要"""
+@tool()
+def get_technical_summary(stock_code: str) -> str:
+    """
+    Get technical analysis summary including K-line trends,
+    moving averages (MA5/MA10/MA20), MACD signals, and volume trends
+    for a financial instrument.
+    Call this tool when user asks about technical analysis, price trends,
+    moving averages, MACD, KDJ, or other technical indicators for stocks or ETFs.
+
+    Args:
+        stock_code: Asset symbol, e.g., A-share: 601318, 600519; HK: 01810, 00700; US: AAPL, TSLA
+    """
     from src.storage import DatabaseManager
     db = DatabaseManager()
-    
+
     try:
         context = db.get_analysis_context(stock_code)
         if not context:
-            return json.dumps({"error": f"未找到 {stock_code} 的历史数据"}, ensure_ascii=False)
-        
-        # 提取关键技术指标
+            return json.dumps({"error": f"No historical data found for {stock_code}"}, ensure_ascii=False)
+
+        # Extract key technical indicators
         summary = {
             "stock_code": stock_code,
             "data_days": len(context.get("daily_data", [])),
         }
-        
-        # 从日线数据提取最近趋势
+
+        # Extract recent trends from daily data
         daily = context.get("daily_data", [])
         if daily and len(daily) >= 5:
             recent = daily[-5:]
             summary["recent_5d"] = [
-                {"date": str(d.get("date", "")), "close": d.get("close"), "pct_chg": d.get("pct_chg")} 
+                {"date": str(d.get("date", "")), "close": d.get("close"), "pct_chg": d.get("pct_chg")}
                 for d in recent
             ]
-            
-            # 最新一天的均线
+
+            # Latest moving averages
             latest = daily[-1]
             summary["latest"] = {
                 "date": str(latest.get("date", "")),
@@ -182,8 +85,8 @@ def _exec_get_technical_summary(stock_code: str) -> str:
                 "ma20": latest.get("ma20"),
                 "volume_ratio": latest.get("volume_ratio"),
             }
-            
-            # 简单趋势判断
+
+            # Simple trend judgment
             if len(daily) >= 20:
                 ma5 = latest.get("ma5")
                 ma10 = latest.get("ma10")
@@ -191,13 +94,13 @@ def _exec_get_technical_summary(stock_code: str) -> str:
                 close = latest.get("close")
                 if ma5 and ma10 and ma20 and close:
                     if close > ma5 > ma10 > ma20:
-                        summary["trend"] = "多头排列（强势上涨）"
+                        summary["trend"] = "Bullish arrangement (strong uptrend)"
                     elif close < ma5 < ma10 < ma20:
-                        summary["trend"] = "空头排列（弱势下跌）"
+                        summary["trend"] = "Bearish arrangement (weak downtrend)"
                     else:
-                        summary["trend"] = "震荡整理"
-        
-        # 实时行情补充
+                        summary["trend"] = "Consolidation"
+
+        # Real-time quote supplement
         realtime = context.get("realtime", {})
         if realtime:
             summary["realtime"] = {
@@ -206,24 +109,33 @@ def _exec_get_technical_summary(stock_code: str) -> str:
                 "volume_ratio": realtime.get("volume_ratio"),
                 "turnover_rate": realtime.get("turnover_rate"),
             }
-        
+
         return json.dumps(summary, ensure_ascii=False, default=str)
     except Exception as e:
-        logger.error(f"[技术面摘要] {stock_code} 获取失败: {e}")
-        return json.dumps({"error": f"获取技术面数据失败: {str(e)}"}, ensure_ascii=False)
+        logger.error(f"[Technical Summary] Failed to get data for {stock_code}: {e}")
+        return json.dumps({"error": f"Failed to get technical data: {str(e)}"}, ensure_ascii=False)
 
 
-def _exec_get_latest_report(stock_code: str) -> str:
-    """获取最近分析报告"""
+@tool()
+def get_latest_report(stock_code: str) -> str:
+    """
+    Get the most recent AI analysis report summary for a financial instrument,
+    including trend judgment, operation advice, risk warnings, and sentiment score.
+    Call this tool when user asks about previous analysis results,
+    historical reports, or wants to review past analysis conclusions.
+
+    Args:
+        stock_code: Asset symbol, e.g., 601318, AAPL
+    """
     from src.storage import DatabaseManager
     db = DatabaseManager()
-    
+
     try:
-        # 获取最近一次分析历史
+        # Get most recent analysis history
         history = db.get_analysis_history(stock_code, limit=1)
         if not history:
-            return json.dumps({"error": f"未找到 {stock_code} 的历史分析报告"}, ensure_ascii=False)
-        
+            return json.dumps({"error": f"No historical analysis report found for {stock_code}"}, ensure_ascii=False)
+
         latest = history[0]
         report = {
             "stock_code": stock_code,
@@ -236,29 +148,40 @@ def _exec_get_latest_report(stock_code: str) -> str:
             "analysis_summary": latest.get("analysis_summary", ""),
             "risk_warning": latest.get("risk_warning", ""),
         }
-        
+
         return json.dumps(report, ensure_ascii=False, default=str)
     except Exception as e:
-        logger.error(f"[历史报告] {stock_code} 获取失败: {e}")
-        return json.dumps({"error": f"获取分析报告失败: {str(e)}"}, ensure_ascii=False)
+        logger.error(f"[Historical Report] Failed to get report for {stock_code}: {e}")
+        return json.dumps({"error": f"Failed to get analysis report: {str(e)}"}, ensure_ascii=False)
 
 
-def _exec_search_news(query: str) -> str:
-    """搜索新闻"""
+@tool()
+def search_news(query: str) -> str:
+    """
+    Perform a web search to find the latest news, articles, and information on any topic.
+    Use this tool when the user asks about current events, recent developments,
+    news articles, or any topic requiring up-to-date information from the internet.
+
+    Args:
+        query: Search query, e.g., 'latest AI developments', 'renewable energy trends', or 'company product announcements'
+    """
     try:
         from src.search_service import get_search_service
         search_svc = get_search_service()
-        
+
         if not search_svc.is_available:
-            return json.dumps({"error": "未配置任何搜索引擎 API Key，请在环境变量中配置 SERPAPI_KEY / TAVILY_KEY / BOCHA_KEY 等"}, ensure_ascii=False)
-        
-        # 遍历可用的搜索引擎 provider，依次尝试
+            return json.dumps(
+                {"error": "No search engine API Key configured. Please set SERPAPI_KEY / TAVILY_KEY / BOCHA_KEY in environment variables."},
+                ensure_ascii=False
+            )
+
+        # Try each available search provider
         for provider in search_svc._providers:
             if not provider.is_available:
                 continue
-            
+
             result = provider.search(query, max_results=5, days=7)
-            
+
             if result.success and result.results:
                 news_list = []
                 for item in result.results[:5]:
@@ -270,30 +193,59 @@ def _exec_search_news(query: str) -> str:
                         "published_date": item.published_date,
                     })
                 return json.dumps({
-                    "query": query, 
+                    "query": query,
                     "provider": result.provider,
                     "results": news_list
                 }, ensure_ascii=False)
             else:
-                logger.warning(f"[新闻搜索] {provider.name} 搜索失败: {result.error_message}，尝试下一个")
-        
-        return json.dumps({"query": query, "results": [], "message": "所有搜索引擎均未找到相关结果"}, ensure_ascii=False)
+                logger.warning(f"[News Search] {provider.name} failed: {result.error_message}, trying next")
+
+        return json.dumps({"query": query, "results": [], "message": "No results found from any search engine"}, ensure_ascii=False)
     except Exception as e:
-        logger.warning(f"[新闻搜索] '{query}' 搜索失败: {e}")
-        return json.dumps({"error": f"新闻搜索失败: {str(e)}"}, ensure_ascii=False)
+        logger.warning(f"[News Search] Failed to search '{query}': {e}")
+        return json.dumps({"error": f"News search failed: {str(e)}"}, ensure_ascii=False)
 
 
-def _exec_get_chip_distribution(stock_code: str) -> str:
-    """获取筹码分布"""
+@tool()
+def get_chip_distribution(stock_code: str) -> str:
+    """
+    Get chip distribution data including profit ratio, average cost,
+    and concentration metrics.
+    Call this tool when user asks about chip distribution, trapped positions,
+    profit positions, or cost distribution. Only supports A-shares.
+
+    Args:
+        stock_code: A-share code, e.g., 601318
+    """
     try:
         from data_provider.base import DataFetcherManager
         manager = DataFetcherManager()
         chip = manager.get_chip_distribution(stock_code)
-        
+
         if chip:
             return json.dumps(chip.to_dict(), ensure_ascii=False, default=str)
-        
-        return json.dumps({"error": f"未能获取 {stock_code} 的筹码分布（仅支持 A 股）"}, ensure_ascii=False)
+
+        return json.dumps({"error": f"Failed to get chip distribution for {stock_code} (A-shares only)"}, ensure_ascii=False)
     except Exception as e:
-        logger.warning(f"[筹码分布] {stock_code} 获取失败: {e}")
-        return json.dumps({"error": f"获取筹码数据失败: {str(e)}"}, ensure_ascii=False)
+        logger.warning(f"[Chip Distribution] Failed to get data for {stock_code}: {e}")
+        return json.dumps({"error": f"Failed to get chip data: {str(e)}"}, ensure_ascii=False)
+
+
+# Legacy support - for backward compatibility during migration
+# These will be removed after all imports are updated
+
+def _deprecated_chat_tools():
+    """Deprecated: Use ToolRegistry.get_all_tools() instead."""
+    from src.services.tool_registry import ToolRegistry
+    return ToolRegistry.get_all_tools()
+
+
+def _deprecated_execute_tool(tool_name: str, tool_args: Dict[str, Any]) -> str:
+    """Deprecated: Use ToolRegistry.execute(tool_name, tool_args) instead."""
+    from src.services.tool_registry import ToolRegistry
+    return ToolRegistry.execute(tool_name, tool_args)
+
+
+# Maintain backward compatibility for existing imports
+CHAT_TOOLS = _deprecated_chat_tools
+execute_tool = _deprecated_execute_tool
