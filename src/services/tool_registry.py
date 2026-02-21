@@ -29,12 +29,14 @@ class ToolDefinition:
         parameters: Dict[str, Any],
         func: Callable,
         required_params: Optional[List[str]] = None,
+        config_schema: Optional[Dict[str, Any]] = None,
     ):
         self.name = name
         self.description = description
         self.parameters = parameters
         self.func = func
         self.required_params = required_params or []
+        self.config_schema = config_schema or {}
 
     def to_openai_schema(self) -> Dict[str, Any]:
         """
@@ -50,6 +52,24 @@ class ToolDefinition:
                     "properties": self.parameters,
                     "required": self.required_params,
                 },
+            },
+        }
+
+    def to_api_schema(self) -> Dict[str, Any]:
+        """
+        Convert to API response format including config schema.
+        """
+        return {
+            "type": "function",
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": self.parameters,
+                    "required": self.required_params,
+                },
+                "config_schema": self.config_schema,
             },
         }
 
@@ -95,6 +115,7 @@ class ToolRegistry:
         parameters: Dict[str, Any],
         func: Callable,
         required_params: Optional[List[str]] = None,
+        config_schema: Optional[Dict[str, Any]] = None,
     ) -> ToolDefinition:
         """
         Register a tool to the global registry.
@@ -105,6 +126,7 @@ class ToolRegistry:
             parameters: JSON Schema properties for parameters
             func: Callable function to execute
             required_params: List of required parameter names
+            config_schema: Optional configuration schema for tool settings
 
         Returns:
             ToolDefinition: The registered tool definition
@@ -120,6 +142,7 @@ class ToolRegistry:
             parameters=parameters,
             func=func,
             required_params=required_params,
+            config_schema=config_schema,
         )
         cls._tools[name] = tool_def
         logger.debug(f"Registered tool: {name}")
@@ -149,6 +172,17 @@ class ToolRegistry:
         """
         cls._ensure_initialized()
         return [tool.to_openai_schema() for tool in cls._tools.values()]
+
+    @classmethod
+    def get_all_tools_with_config(cls) -> List[Dict[str, Any]]:
+        """
+        Get all registered tools with their config schemas for API.
+
+        Returns:
+            List of tool schemas including config_schema
+        """
+        cls._ensure_initialized()
+        return [tool.to_api_schema() for tool in cls._tools.values()]
 
     @classmethod
     def get_tool_map(cls) -> Dict[str, Dict[str, Any]]:
@@ -181,13 +215,14 @@ class ToolRegistry:
         return valid
 
     @classmethod
-    def execute(cls, name: str, arguments: Dict[str, Any]) -> str:
+    def execute(cls, name: str, arguments: Dict[str, Any], config: Optional[Dict[str, Any]] = None) -> str:
         """
         Execute a tool by name with given arguments.
 
         Args:
             name: Tool name
             arguments: Tool arguments dict
+            config: Optional tool configuration dict
 
         Returns:
             Tool execution result as string (JSON)
@@ -201,7 +236,12 @@ class ToolRegistry:
         if not tool:
             raise ValueError(f"Tool not found: {name}")
 
-        logger.debug(f"Executing tool '{name}' with args: {arguments}")
+        logger.debug(f"Executing tool '{name}' with args: {arguments}, config: {config}")
+
+        # If config is provided, pass it as _tool_config parameter
+        if config:
+            return tool.execute(**arguments, _tool_config=config)
+
         return tool.execute(**arguments)
 
     @classmethod

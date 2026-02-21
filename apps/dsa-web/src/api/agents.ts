@@ -7,6 +7,7 @@ export interface AgentProfile {
     system_prompt: string;
     enabled_tools: string[];
     manual_tools?: string[];
+    tool_configs?: Record<string, Record<string, any>>;
     model_config: Record<string, any>;
     is_default: boolean;
     is_system: boolean;
@@ -20,6 +21,7 @@ export interface CreateAgentParams {
     system_prompt?: string;
     enabled_tools?: string[];
     manual_tools?: string[];
+    tool_configs?: Record<string, Record<string, any>>;
     model_config?: Record<string, any>;
 }
 
@@ -29,6 +31,7 @@ export interface UpdateAgentParams {
     system_prompt?: string;
     enabled_tools?: string[];
     manual_tools?: string[];
+    tool_configs?: Record<string, Record<string, any>>;
     model_config?: Record<string, any>;
 }
 

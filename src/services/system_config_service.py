@@ -169,40 +169,86 @@ class SystemConfigService:
         }
 
     @staticmethod
+    def _build_model_urls(base_url: Optional[str]) -> List[str]:
+        """Build candidate model-list URLs for OpenAI-compatible providers."""
+        if not base_url:
+            return ["https://api.openai.com/v1/models"]
+
+        normalized = base_url.strip()
+        if not normalized:
+            return ["https://api.openai.com/v1/models"]
+
+        if not normalized.startswith(("http://", "https://")):
+            normalized = f"https://{normalized}"
+
+        normalized = normalized.rstrip("/")
+
+        # Common patterns
+        if normalized.endswith("/v1/models") or normalized.endswith("/models"):
+            return [normalized]
+
+        if normalized.endswith("/v1"):
+            return [f"{normalized}/models", f"{normalized[:-3]}/models"]
+
+        # Try both /v1/models and /models for compatibility with different gateways
+        return [f"{normalized}/v1/models", f"{normalized}/models"]
+
+    @staticmethod
     def fetch_openai_models(api_key: str, base_url: Optional[str] = None) -> List[str]:
         """Fetch available models from an OpenAI-compatible provider."""
         if not api_key or api_key.startswith("your_"):
             return []
 
-        url = f"{base_url.rstrip('/')}/models" if base_url else "https://api.openai.com/v1/models"
-        if not url.startswith("http"):
-             url = f"https://{url}" if not url.startswith("api.") else f"https://{url}/v1/models"
-        
-        # Ensure url ends with /models
-        if not url.endswith("/models"):
-            if "/v1" in url and not url.endswith("/v1"):
-                 url = url.rstrip("/") + "/models"
-            else:
-                 # Default heuristic
-                 pass
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        }
 
-        logger.info(f"Fetching models from {url}")
-        try:
-            headers = {"Authorization": f"Bearer {api_key}"}
-            with httpx.Client(timeout=10.0) as client:
-                response = client.get(url, headers=headers)
-                response.raise_for_status()
-                data = response.json()
-                
-                # OpenAI format: {"data": [{"id": "model-1"}, ...]}
-                if isinstance(data, dict) and "data" in data:
-                    models = [m["id"] for m in data["data"] if isinstance(m, dict) and "id" in m]
-                    # Sort and limit
-                    return sorted(models)
-                return []
-        except Exception as e:
-            logger.error(f"Failed to fetch models from {url}: {e}")
-            raise RuntimeError(f"Fetch models failed: {str(e)}")
+        candidate_urls = SystemConfigService._build_model_urls(base_url)
+        last_error: Optional[Exception] = None
+
+        for url in candidate_urls:
+            for trust_env in (True, False):
+                logger.info("Fetching models from %s (trust_env=%s)", url, trust_env)
+                try:
+                    with httpx.Client(
+                        timeout=httpx.Timeout(15.0, connect=10.0),
+                        follow_redirects=True,
+                        trust_env=trust_env,
+                        http2=False,
+                    ) as client:
+                        response = client.get(url, headers=headers)
+
+                    if response.status_code == 401:
+                        raise RuntimeError("Authentication failed: invalid API key")
+                    if response.status_code == 403:
+                        raise RuntimeError("Access denied by provider (403)")
+                    if response.status_code == 404:
+                        # try next candidate URL
+                        continue
+
+                    response.raise_for_status()
+                    data = response.json()
+
+                    # OpenAI format: {"data": [{"id": "model-1"}, ...]}
+                    if isinstance(data, dict) and "data" in data:
+                        models = [m["id"] for m in data["data"] if isinstance(m, dict) and "id" in m]
+                        return sorted(models)
+
+                    return []
+
+                except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+                    last_error = exc
+                    logger.warning("Model fetch network error at %s (trust_env=%s): %s", url, trust_env, exc)
+                except Exception as exc:
+                    last_error = exc
+                    logger.warning("Model fetch failed at %s (trust_env=%s): %s", url, trust_env, exc)
+
+        error_text = str(last_error) if last_error else "unknown error"
+        raise RuntimeError(
+            "Fetch models failed. Please verify BASE_URL/API_KEY, proxy settings, and TLS certificates. "
+            f"Last error: {error_text}"
+        )
 
     def _collect_issues(self, items: Sequence[Dict[str, str]], mask_token: str) -> List[Dict[str, Any]]:
         """Collect field-level and cross-field validation issues."""

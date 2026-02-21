@@ -155,8 +155,39 @@ def get_latest_report(stock_code: str) -> str:
         return json.dumps({"error": f"Failed to get analysis report: {str(e)}"}, ensure_ascii=False)
 
 
-@tool()
-def search_news(query: str) -> str:
+@tool(
+    config_schema={
+        "provider": {
+            "type": "select",
+            "label": "搜索服务提供商",
+            "description": "选择用于搜索新闻的 API 提供商",
+            "options": [
+                {"value": "auto", "label": "自动选择 (推荐)"},
+                {"value": "tavily", "label": "Tavily"},
+                {"value": "serpapi", "label": "SerpAPI"},
+                {"value": "bocha", "label": "博查 (Bocha)"}
+            ],
+            "default": "auto"
+        },
+        "max_results": {
+            "type": "number",
+            "label": "最大结果数",
+            "description": "每次搜索返回的最大结果数量",
+            "min": 1,
+            "max": 20,
+            "default": 5
+        },
+        "days": {
+            "type": "number",
+            "label": "时间范围 (天)",
+            "description": "搜索最近多少天内的新闻",
+            "min": 1,
+            "max": 90,
+            "default": 7
+        }
+    }
+)
+def search_news(query: str, _tool_config: dict = None) -> str:
     """
     Perform a web search to find the latest news, articles, and information on any topic.
     Use this tool when the user asks about current events, recent developments,
@@ -164,7 +195,14 @@ def search_news(query: str) -> str:
 
     Args:
         query: Search query, e.g., 'latest AI developments', 'renewable energy trends', or 'company product announcements'
+        _tool_config: Tool configuration (injected by ToolRegistry.execute)
     """
+    # Get configuration values with defaults
+    config = _tool_config or {}
+    provider_preference = config.get("provider", "auto")
+    max_results = config.get("max_results", 5)
+    days = config.get("days", 7)
+
     try:
         from src.search_service import get_search_service
         search_svc = get_search_service()
@@ -175,16 +213,24 @@ def search_news(query: str) -> str:
                 ensure_ascii=False
             )
 
+        # Filter providers based on preference
+        providers = search_svc._providers
+        if provider_preference and provider_preference != "auto":
+            providers = [p for p in providers if p.name.lower() == provider_preference.lower()]
+            if not providers:
+                # Fallback to all providers if preferred is not available
+                providers = search_svc._providers
+
         # Try each available search provider
-        for provider in search_svc._providers:
+        for provider in providers:
             if not provider.is_available:
                 continue
 
-            result = provider.search(query, max_results=5, days=7)
+            result = provider.search(query, max_results=max_results, days=days)
 
             if result.success and result.results:
                 news_list = []
-                for item in result.results[:5]:
+                for item in result.results[:max_results]:
                     news_list.append({
                         "title": item.title,
                         "snippet": item.snippet,

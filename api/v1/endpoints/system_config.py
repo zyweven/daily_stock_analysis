@@ -185,12 +185,22 @@ def fetch_models(
     try:
         models = service.fetch_openai_models(api_key=request.api_key, base_url=request.base_url)
         return FetchModelsResponse(models=models)
+    except RuntimeError as exc:
+        # Provider/network errors should surface as 400 for better UX in settings page
+        logger.warning("Model fetch failed: %s", exc)
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "fetch_failed",
+                "message": str(exc),
+            },
+        )
     except Exception as exc:
         logger.error("Failed to fetch models: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=500,
             detail={
-                "error": "fetch_failed",
-                "message": f"Failed to fetch models: {str(exc)}",
+                "error": "internal_error",
+                "message": "Failed to fetch models",
             },
         )

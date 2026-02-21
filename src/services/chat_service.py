@@ -233,6 +233,7 @@ class ChatService:
             "name": agent_config.get("name", "Unknown"),
             "system_prompt": agent_config.get("system_prompt", ""),
             "enabled_tools": agent_config.get("enabled_tools", []),
+            "tool_configs": agent_config.get("tool_configs", {}),
             "model_config": agent_config.get("model_config", {}),
             "skills": [s.get("id") for s in agent_config.get("skills", [])],
         }
@@ -421,6 +422,7 @@ class ChatService:
         # 获取工具配置
         session_config = self._get_session_config(session_id)
         enabled_tool_names = session_config.get("enabled_tools", [])
+        tool_configs = session_config.get("tool_configs", {})
         active_tools = [
             t for t in ToolRegistry.get_all_tools() 
             if t['function']['name'] in enabled_tool_names
@@ -491,8 +493,9 @@ class ChatService:
                                 "round": round_idx + 1
                             }}
                             
-                            # Execute tool via registry
-                            tool_result = ToolRegistry.execute(tool_name, tool_args)
+                            # Execute tool via registry with config
+                            tool_config = tool_configs.get(tool_name, {})
+                            tool_result = ToolRegistry.execute(tool_name, tool_args, config=tool_config)
                             
                             # 保存工具调用和结果
                             self._save_message(session_id, 'tool_call', tool_name,

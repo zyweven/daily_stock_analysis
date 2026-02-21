@@ -13,12 +13,27 @@ type SkillSelectionState = {
 
 type SkillSelectionMap = Record<string, SkillSelectionState>;
 
+// 工具配置：记录每个工具的配置项值
+type ToolConfigMap = Record<string, Record<string, any>>;
+
 const DEFAULT_FORM_DATA = {
     name: '',
     description: '',
     system_prompt: '',
     enabled_tools: [] as string[],
     model_config: { temperature: 0.5 } as Record<string, any>,
+};
+
+// 从工具的 config_schema 生成默认配置
+const getToolDefaultConfig = (tool: ToolDefinition): Record<string, any> => {
+    const defaults: Record<string, any> = {};
+    const schema = tool.function.config_schema;
+    if (schema) {
+        for (const [key, field] of Object.entries(schema)) {
+            defaults[key] = field.default;
+        }
+    }
+    return defaults;
 };
 
 const createEmptySkillSelectionMap = (skills: Skill[]): SkillSelectionMap => {
@@ -56,10 +71,12 @@ const AgentSettingsPage: React.FC = () => {
 
     const [formData, setFormData] = useState(DEFAULT_FORM_DATA);
     const [skillSelectionMap, setSkillSelectionMap] = useState<SkillSelectionMap>({});
+    const [toolConfigs, setToolConfigs] = useState<ToolConfigMap>({});
 
     const [preview, setPreview] = useState<SkillPreviewResult | null>(null);
     const [isPreviewLoading, setIsPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
+    const [expandedTools, setExpandedTools] = useState<Set<string>>(new Set());
 
     const selectedSkillIds = useMemo(
         () => skills.filter((skill) => skillSelectionMap[skill.id]?.isEnabled).map((skill) => skill.id),
@@ -97,7 +114,7 @@ const AgentSettingsPage: React.FC = () => {
         try {
             const [agentList, toolData, skillList] = await Promise.all([
                 AgentApi.list(),
-                ToolApi.list(),
+                ToolApi.list(true), // 包含 config_schema
                 SkillApi.list({ include_builtin: true }),
             ]);
 
@@ -105,10 +122,24 @@ const AgentSettingsPage: React.FC = () => {
             setTools(toolData.tools);
             setSkills(skillList);
 
+            // 初始化所有工具的默认配置
+            const defaultConfigs: ToolConfigMap = {};
+            for (const tool of toolData.tools) {
+                defaultConfigs[tool.function.name] = getToolDefaultConfig(tool);
+            }
+            setToolConfigs(defaultConfigs);
+
             const defaultAgent = agentList.find((agent) => agent.is_default) || agentList[0];
             if (defaultAgent) {
                 setSelectedAgentId(defaultAgent.id);
                 applyAgentToForm(defaultAgent);
+                // 加载 Agent 的工具配置
+                if (defaultAgent.tool_configs) {
+                    setToolConfigs((prev) => ({
+                        ...prev,
+                        ...defaultAgent.tool_configs,
+                    }));
+                }
                 await loadAgentBindings(defaultAgent.id, skillList);
             } else {
                 setSkillSelectionMap(createEmptySkillSelectionMap(skillList));
@@ -154,6 +185,12 @@ const AgentSettingsPage: React.FC = () => {
     const handleSelectAgent = async (agent: AgentProfile) => {
         setSelectedAgentId(agent.id);
         applyAgentToForm(agent);
+        // 加载 Agent 的工具配置
+        const defaultConfigs: ToolConfigMap = {};
+        for (const tool of tools) {
+            defaultConfigs[tool.function.name] = getToolDefaultConfig(tool);
+        }
+        setToolConfigs(agent.tool_configs ? { ...defaultConfigs, ...agent.tool_configs } : defaultConfigs);
         await loadAgentBindings(agent.id, skills);
     };
 
@@ -262,12 +299,21 @@ const AgentSettingsPage: React.FC = () => {
 
         setIsSaving(true);
         try {
+            // 只保存已启用工具的配置
+            const enabledToolConfigs: ToolConfigMap = {};
+            for (const toolName of formData.enabled_tools) {
+                if (toolConfigs[toolName]) {
+                    enabledToolConfigs[toolName] = toolConfigs[toolName];
+                }
+            }
+
             const payload = {
                 name: formData.name,
                 description: formData.description,
                 system_prompt: formData.system_prompt,
                 enabled_tools: formData.enabled_tools,
                 manual_tools: formData.enabled_tools,
+                tool_configs: enabledToolConfigs,
                 model_config: formData.model_config,
             };
 
@@ -447,21 +493,140 @@ const AgentSettingsPage: React.FC = () => {
                         <label className="block text-sm font-semibold text-gray-300 ml-1">
                             手动工具 <span className="text-gray-500 font-normal">({formData.enabled_tools.length} 已启用)</span>
                         </label>
-                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                        <div className="space-y-3">
                             {tools.map((tool) => {
                                 const isEnabled = formData.enabled_tools.includes(tool.function.name);
+                                const isExpanded = expandedTools.has(tool.function.name);
+                                const configSchema = tool.function.config_schema;
+                                const hasConfig = configSchema && Object.keys(configSchema).length > 0;
+
                                 return (
                                     <div
                                         key={tool.function.name}
-                                        onClick={() => toggleTool(tool.function.name)}
-                                        className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                                        className={`rounded-xl border transition-all ${
                                             isEnabled
-                                                ? 'bg-blue-900/20 border-blue-500/40'
-                                                : 'bg-gray-800/30 border-gray-700/50 hover:bg-gray-800/60'
+                                                ? 'bg-blue-900/10 border-blue-500/30'
+                                                : 'bg-gray-800/30 border-gray-700/50'
                                         }`}
                                     >
-                                        <div className="font-semibold text-gray-200">{tool.function.name}</div>
-                                        <p className="text-xs text-gray-400 mt-2 line-clamp-2">{tool.function.description}</p>
+                                        {/* 工具头部 */}
+                                        <div className="p-4 flex items-start justify-between gap-3">
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="font-semibold text-gray-200">{tool.function.name}</h3>
+                                                    {hasConfig && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setExpandedTools(prev => {
+                                                                    const next = new Set(prev);
+                                                                    if (next.has(tool.function.name)) {
+                                                                        next.delete(tool.function.name);
+                                                                    } else {
+                                                                        next.add(tool.function.name);
+                                                                    }
+                                                                    return next;
+                                                                });
+                                                            }}
+                                                            className="text-xs text-blue-400 hover:text-blue-300"
+                                                        >
+                                                            {isExpanded ? '收起配置' : '配置'}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-gray-400 mt-1 line-clamp-2">{tool.function.description}</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleTool(tool.function.name)}
+                                                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                                                    isEnabled
+                                                        ? 'bg-blue-600/30 text-blue-200 border-blue-500/40'
+                                                        : 'bg-gray-800 text-gray-300 border-gray-600'
+                                                }`}
+                                            >
+                                                {isEnabled ? '已启用' : '启用'}
+                                            </button>
+                                        </div>
+
+                                        {/* 工具配置面板 */}
+                                        {isExpanded && hasConfig && isEnabled && (
+                                            <div className="px-4 pb-4 border-t border-gray-700/50 pt-3">
+                                                <div className="text-xs text-gray-500 mb-2">工具配置</div>
+                                                <div className="space-y-3">
+                                                    {Object.entries(configSchema).map(([key, field]) => {
+                                                        const value = toolConfigs[tool.function.name]?.[key] ?? field.default;
+
+                                                        return (
+                                                            <div key={key}>
+                                                                <label className="block text-xs text-gray-400 mb-1">
+                                                                    {field.label}
+                                                                </label>
+                                                                {field.type === 'select' && field.options && (
+                                                                    <select
+                                                                        value={value}
+                                                                        onChange={(e) => {
+                                                                            setToolConfigs(prev => ({
+                                                                                ...prev,
+                                                                                [tool.function.name]: {
+                                                                                    ...prev[tool.function.name],
+                                                                                    [key]: e.target.value
+                                                                                }
+                                                                            }));
+                                                                        }}
+                                                                        className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-gray-300"
+                                                                    >
+                                                                        {field.options.map((opt) => (
+                                                                            <option key={opt.value} value={opt.value}>
+                                                                                {opt.label}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
+                                                                )}
+                                                                {field.type === 'text' && (
+                                                                    <input
+                                                                        type="text"
+                                                                        value={value}
+                                                                        onChange={(e) => {
+                                                                            setToolConfigs(prev => ({
+                                                                                ...prev,
+                                                                                [tool.function.name]: {
+                                                                                    ...prev[tool.function.name],
+                                                                                    [key]: e.target.value
+                                                                                }
+                                                                            }));
+                                                                        }}
+                                                                        className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-gray-300"
+                                                                        placeholder={field.description}
+                                                                    />
+                                                                )}
+                                                                {field.type === 'number' && (
+                                                                    <input
+                                                                        type="number"
+                                                                        min={field.min}
+                                                                        max={field.max}
+                                                                        value={value}
+                                                                        onChange={(e) => {
+                                                                            setToolConfigs(prev => ({
+                                                                                ...prev,
+                                                                                [tool.function.name]: {
+                                                                                    ...prev[tool.function.name],
+                                                                                    [key]: Number(e.target.value)
+                                                                                }
+                                                                            }));
+                                                                        }}
+                                                                        className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-gray-300"
+                                                                    />
+                                                                )}
+                                                                {field.description && (
+                                                                    <p className="text-xs text-gray-600 mt-0.5">{field.description}</p>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 );
                             })}

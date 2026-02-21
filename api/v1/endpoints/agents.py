@@ -21,12 +21,14 @@ router = APIRouter()
 
 class AgentResponse(BaseModel):
     model_config = {"populate_by_name": True}
-    
+
     id: str
     name: str
     description: Optional[str] = ""
     system_prompt: Optional[str] = ""
     enabled_tools: List[str] = []
+    manual_tools: List[str] = []
+    tool_configs: Dict[str, Any] = {}
     agent_model_config: Dict[str, Any] = Field(default={}, alias="model_config")
     is_default: bool
     is_system: bool
@@ -35,20 +37,24 @@ class AgentResponse(BaseModel):
 
 class AgentCreateRequest(BaseModel):
     model_config = {"populate_by_name": True}
-    
+
     name: str = Field(..., min_length=1, max_length=100)
     description: Optional[str] = ""
     system_prompt: Optional[str] = ""
     enabled_tools: List[str] = []
+    manual_tools: List[str] = []
+    tool_configs: Dict[str, Any] = {}
     agent_model_config: Dict[str, Any] = Field(default={}, alias="model_config")
 
 class AgentUpdateRequest(BaseModel):
     model_config = {"populate_by_name": True}
-    
+
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     description: Optional[str] = None
     system_prompt: Optional[str] = None
     enabled_tools: Optional[List[str]] = None
+    manual_tools: Optional[List[str]] = None
+    tool_configs: Optional[Dict[str, Any]] = None
     agent_model_config: Optional[Dict[str, Any]] = Field(None, alias="model_config")
 
 # === 接口实现 ===
@@ -78,6 +84,8 @@ async def create_agent(request: AgentCreateRequest):
         description=request.description,
         system_prompt=request.system_prompt,
         enabled_tools=request.enabled_tools,
+        manual_tools=request.manual_tools,
+        tool_configs=request.tool_configs,
         model_config=request.agent_model_config
     )
     return AgentResponse(**agent.to_dict())
@@ -86,11 +94,14 @@ async def create_agent(request: AgentCreateRequest):
 async def update_agent(agent_id: str, request: AgentUpdateRequest):
     """更新 Agent"""
     svc = AgentService()
-    
+
     update_data = request.model_dump(exclude_none=True)
+    # 处理 alias 字段
+    if "agent_model_config" in update_data:
+        update_data["model_config"] = update_data.pop("agent_model_config")
     if not update_data:
         raise HTTPException(status_code=400, detail="无更新内容")
-        
+
     agent = svc.update_agent(agent_id, **update_data)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent 不存在")

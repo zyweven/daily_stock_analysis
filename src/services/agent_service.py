@@ -104,6 +104,7 @@ class AgentService:
         system_prompt: str,
         description: str = "",
         manual_tools: List[str] = None,
+        tool_configs: Dict[str, Dict] = None,
         model_config: Dict = None,
         skill_ids: List[str] = None,
     ) -> AgentProfile:
@@ -115,10 +116,12 @@ class AgentService:
             system_prompt: Base system prompt (personality/identity)
             description: Agent description
             manual_tools: Additional tools not provided by skills
+            tool_configs: Tool-specific configurations
             model_config: Model parameters (temperature, etc.)
             skill_ids: Skill IDs to bind to this agent
         """
         manual_tools = manual_tools or []
+        tool_configs = tool_configs or {}
         model_config = model_config or {}
         skill_ids = skill_ids or []
 
@@ -132,6 +135,7 @@ class AgentService:
                 description=description,
                 system_prompt=system_prompt,
                 manual_tools=json.dumps(valid_tools),
+                tool_configs=json.dumps(tool_configs),
                 model_config=json.dumps(model_config),
                 is_default=False,
                 is_system=False
@@ -179,6 +183,8 @@ class AgentService:
             if "enabled_tools" in kwargs:
                 valid_tools = ToolRegistry.validate_tools(kwargs["enabled_tools"])
                 agent.manual_tools = json.dumps(valid_tools)
+            if "tool_configs" in kwargs:
+                agent.tool_configs = json.dumps(kwargs["tool_configs"])
             if "model_config" in kwargs:
                 agent.model_config = json.dumps(kwargs["model_config"])
 
@@ -240,6 +246,7 @@ class AgentService:
                 "description": agent.description,
                 "system_prompt": skill_config["system_prompt"],
                 "enabled_tools": skill_config["enabled_tools"],
+                "tool_configs": json.loads(agent.tool_configs) if agent.tool_configs else {},
                 "skills": agent_skills,
                 "model_config": json.loads(agent.model_config) if agent.model_config else {},
                 "is_default": agent.is_default,

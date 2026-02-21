@@ -159,6 +159,7 @@ def _build_parameters_schema(
 def tool(
     description: Optional[str] = None,
     name: Optional[str] = None,
+    config_schema: Optional[Dict[str, Any]] = None,
 ):
     """
     Decorator to register a function as an AI tool.
@@ -172,6 +173,15 @@ def tool(
     Args:
         description: Optional override for tool description
         name: Optional override for tool name (default: function name)
+        config_schema: Optional configuration schema for tool settings
+            Example: {
+                "provider": {
+                    "type": "select",
+                    "label": "Search Provider",
+                    "options": ["serpapi", "tavily", "bocha"],
+                    "default": "serpapi"
+                }
+            }
 
     Returns:
         Decorated function (original function is preserved)
@@ -212,6 +222,7 @@ def tool(
             parameters=properties,
             func=func,
             required_params=required,
+            config_schema=config_schema,
         )
 
         logger.debug(f"@tool decorator registered: {func_name}")
