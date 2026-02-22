@@ -194,9 +194,29 @@ OPENAI_MODEL=deepseek-chat
 
 ---
 
+### Q13: WebUI 配置页“获取模型”失败，提示 SSL EOF？
+
+**现象**：点击“获取模型”时报错，日志包含：
+`[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol`
+
+**常见原因**：
+1. 系统代理/公司代理导致 TLS 握手不稳定
+2. `OPENAI_BASE_URL` 填写不规范（带了多余路径或协议缺失）
+3. 网关模型列表路径差异（`/v1/models` 与 `/models`）
+
+**解决方案**：
+1. `OPENAI_BASE_URL` 建议填写 API 根地址，例如：
+   - `https://api.deepseek.com`
+   - `https://dashscope.aliyuncs.com/compatible-mode`
+2. 检查系统代理变量：`HTTP_PROXY` / `HTTPS_PROXY`
+3. 如在公司网络，尝试切换网络或关闭拦截代理后重试
+4. 当前版本已内置兼容策略：自动尝试多种 URL 组合及代理/直连模式
+
+---
+
 ## 🐳 Docker 相关
 
-### Q13: Docker 容器启动后立即退出？
+### Q14: Docker 容器启动后立即退出？
 
 **解决方案**：
 1. 查看容器日志：
@@ -210,7 +230,7 @@ OPENAI_MODEL=deepseek-chat
 
 ---
 
-### Q14: Docker 中 API 服务无法访问？
+### Q15: Docker 中 API 服务无法访问？
 
 **解决方案**：
 1. 确保启动命令包含 `--host 0.0.0.0`（不能是 127.0.0.1）
@@ -224,12 +244,12 @@ OPENAI_MODEL=deepseek-chat
 
 ## 🔧 其他问题
 
-### Q15: 如何只运行大盘复盘，不分析个股？
+### Q16: 如何只运行大盘复盘，不分析个股？
 
 **方法**：
 ```bash
 # 本地运行
-python main.py --market-only
+python main.py --market-review
 
 # GitHub Actions
 # 手动触发时选择 mode: market-only
@@ -237,7 +257,7 @@ python main.py --market-only
 
 ---
 
-### Q16: 分析结果中买入/观望/卖出数量统计不对？
+### Q17: 分析结果中买入/观望/卖出数量统计不对？
 
 **原因**：早期版本使用正则匹配统计，可能与实际建议不一致。
 

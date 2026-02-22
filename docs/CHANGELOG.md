@@ -25,6 +25,10 @@
   - 支持 `STOCK_GROUP_N` + `EMAIL_GROUP_N` 配置，不同股票组报告发送到对应邮箱
   - 大盘复盘发往所有配置的邮箱
 
+### 文档
+- 📝 FAQ 新增“获取模型 SSL EOF”排障说明，并修正相关问答编号
+- 📝 完整指南同步参数与配置说明：补充 `--single-notify`，将 Discord Bot 频道变量统一为 `DISCORD_MAIN_CHANNEL_ID`，修正 GitHub Actions 手动模式值为 `market-only`
+
 ## [3.0.5] - 2026-02-08
 
 ### 修复

@@ -4,7 +4,7 @@
 
 > 💡 快速上手请参考 [README.md](../README.md)，本文档为进阶配置。
 
-## � 项目结构
+## 📦 项目结构
 
 ```
 daily_stock_analysis/
@@ -75,7 +75,7 @@ daily_stock_analysis/
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID (用于发送到子话题) | 可选 |
 | `DISCORD_WEBHOOK_URL` | Discord Webhook URL（[创建方法](https://support.discord.com/hc/en-us/articles/228383668)） | 可选 |
 | `DISCORD_BOT_TOKEN` | Discord Bot Token（与 Webhook 二选一） | 可选 |
-| `DISCORD_CHANNEL_ID` | Discord Channel ID（使用 Bot 时需要） | 可选 |
+| `DISCORD_MAIN_CHANNEL_ID` | Discord Channel ID（使用 Bot 时需要） | 可选 |
 | `EMAIL_SENDER` | 发件人邮箱（如 `xxx@qq.com`） | 可选 |
 | `EMAIL_PASSWORD` | 邮箱授权码（非登录密码） | 可选 |
 | `EMAIL_RECEIVERS` | 收件人邮箱（多个用逗号分隔，留空则发给自己） | 可选 |
@@ -166,7 +166,7 @@ daily_stock_analysis/
 | `TELEGRAM_MESSAGE_THREAD_ID` | Telegram Topic ID | 可选 |
 | `DISCORD_WEBHOOK_URL` | Discord Webhook URL | 可选 |
 | `DISCORD_BOT_TOKEN` | Discord Bot Token（与 Webhook 二选一） | 可选 |
-| `DISCORD_CHANNEL_ID` | Discord Channel ID（使用 Bot 时需要） | 可选 |
+| `DISCORD_MAIN_CHANNEL_ID` | Discord Channel ID（使用 Bot 时需要） | 可选 |
 | `EMAIL_SENDER` | 发件人邮箱 | 可选 |
 | `EMAIL_PASSWORD` | 邮箱授权码（非登录密码） | 可选 |
 | `EMAIL_RECEIVERS` | 收件人邮箱（逗号分隔，留空发给自己） | 可选 |
@@ -323,10 +323,26 @@ docker run -d --env-file .env -p 8000:8000 -v ./data:/app/data stock-analysis py
 
 ## 本地运行详细配置
 
+### Windows 一键启动（推荐）
+
+在项目根目录执行：
+
+```powershell
+.\start.bat
+```
+
+脚本会自动构建前端并启动后端服务，默认访问地址：`http://127.0.0.1:8000`。
+
 ### 安装依赖
 
 ```bash
-# Python 3.10+ 推荐
+# 方式一：uv（推荐）
+uv sync
+
+# 运行命令示例
+uv run python main.py --webui-only
+
+# 方式二：pip/venv
 pip install -r requirements.txt
 
 # 或使用 conda
@@ -344,6 +360,7 @@ python main.py --no-market-review     # 仅个股分析
 python main.py --stocks 600519,300750 # 指定股票
 python main.py --dry-run              # 仅获取数据，不 AI 分析
 python main.py --no-notify            # 不发送推送
+python main.py --single-notify        # 单股推送（每分析完一只立即推送）
 python main.py --schedule             # 定时任务模式
 python main.py --debug                # 调试模式（详细日志）
 python main.py --workers 5            # 指定并发数
@@ -464,7 +481,7 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
 
 ```bash
 DISCORD_BOT_TOKEN=your_bot_token
-DISCORD_CHANNEL_ID=your_channel_id
+DISCORD_MAIN_CHANNEL_ID=your_channel_id
 ```
 
 ### Pushover（iOS/Android 推送）
@@ -625,10 +642,12 @@ FastAPI 提供 RESTful API 服务，支持配置管理和触发分析。
 
 ### 功能特性
 
-- 📝 **配置管理** - 查看/修改自选股列表
+- 📝 **配置管理** - 查看/修改系统配置、自选股列表
 - 🚀 **快速分析** - 通过 API 接口触发分析
 - 📊 **实时进度** - 分析任务状态实时更新，支持多任务并行
 - 📈 **回测验证** - 评估历史分析准确率，查询方向胜率与模拟收益
+- 🧩 **技能体系** - 支持 Skill 库管理、Agent-Skill 绑定与组合预览
+- 🛠️ **工具配置** - 支持按工具下发配置（例如 `search_news` 的 provider / max_results / days）
 - 🔗 **API 文档** - 访问 `/docs` 查看 Swagger UI
 
 ### API 接口
@@ -643,6 +662,18 @@ FastAPI 提供 RESTful API 服务，支持配置管理和触发分析。
 | `/api/v1/backtest/results` | GET | 查询回测结果（分页） |
 | `/api/v1/backtest/performance` | GET | 获取整体回测表现 |
 | `/api/v1/backtest/performance/{code}` | GET | 获取单股回测表现 |
+| `/api/v1/system/config` | GET/PUT | 读取/更新系统配置 |
+| `/api/v1/system/config/validate` | POST | 校验配置但不落盘 |
+| `/api/v1/system/config/schema` | GET | 获取配置字段元数据 |
+| `/api/v1/system/config/fetch-models` | POST | 从 OpenAI 兼容服务拉取模型列表 |
+| `/api/v1/tools` | GET | 获取工具列表（支持 `include_config=true` 返回工具配置 schema） |
+| `/api/v1/skills` | GET/POST | 技能列表、创建技能 |
+| `/api/v1/skills/{skill_id}` | GET/PUT/DELETE | 技能详情、更新、删除 |
+| `/api/v1/skills/categories` | GET | 技能分类统计 |
+| `/api/v1/skills/preview` | POST | 预览技能组合效果 |
+| `/api/v1/skills/agents/{agent_id}/bind` | POST | 绑定技能到 Agent |
+| `/api/v1/skills/agents/{agent_id}/skills` | GET | 查询 Agent 已绑定技能 |
+| `/api/v1/skills/agents/{agent_id}/skills/{binding_id}` | PUT/DELETE | 更新/解绑 Agent-Skill 绑定 |
 | `/api/health` | GET | 健康检查 |
 | `/docs` | GET | API Swagger 文档 |
 
@@ -702,7 +733,53 @@ python main.py --serve-only --host 0.0.0.0 --port 8888
 
 ---
 
+## 本地 WebUI 管理界面
+
+启动服务后访问：`http://127.0.0.1:8000`
+
+### 主要页面
+
+- `/agents`：助手配置页，支持配置 Agent 身份、手动工具、Skill 绑定、组合预览
+- `/skills`：技能库，支持技能分类浏览、详情查看、用户技能 CRUD、模板应用
+- `/chat`：对话页，可选择 Agent 验证技能组合后的工具调用效果
+- `/expert-panel`：专家会诊页（多模型分析）
+
+### 工具配置关联说明
+
+在 Agent 配置页中，工具支持独立配置（由后端 `config_schema` 动态下发）：
+
+- 例如 `search_news` 可配置：
+  - `provider`：`auto/tavily/serpapi/bocha`
+  - `max_results`：返回条数
+  - `days`：检索时间范围
+
+这些配置会保存到 Agent 的 `tool_configs`，并在 Chat 执行工具时自动注入。
+
+---
+
 ## 常见问题
+
+### OpenAI 兼容模型“获取模型”失败（SSL EOF）
+
+**现象**：在 WebUI 配置页点击“获取模型”时报错，日志包含：
+`[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol`
+
+**常见原因**：
+- 系统代理 / 公司代理导致 TLS 握手不稳定
+- `OPENAI_BASE_URL` 填写不规范（带了多余路径或协议缺失）
+- API 网关模型列表路径差异（`/v1/models` vs `/models`）
+
+**当前版本内置兼容策略**：
+- 自动尝试多种 URL 组合（含 `/v1/models` 与 `/models`）
+- 自动尝试使用系统代理和直连（`trust_env=True/False`）
+- 对网络/鉴权错误返回更清晰的 400 错误信息
+
+**建议排查步骤**：
+1. `OPENAI_BASE_URL` 建议填写 API 根地址，例如：
+   - `https://api.deepseek.com`
+   - `https://dashscope.aliyuncs.com/compatible-mode`
+2. 检查系统代理变量：`HTTP_PROXY` / `HTTPS_PROXY`
+3. 如在公司网络，尝试切换网络或关闭拦截代理后重试
 
 ### Q: 推送消息被截断？
 A: 企业微信/飞书有消息长度限制，系统已自动分段发送。如需完整内容，可配置飞书云文档功能。
