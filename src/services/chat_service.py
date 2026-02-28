@@ -593,13 +593,16 @@ class ChatService:
         # 尝试从多模型配置中查找
         if model_name:
             try:
-                from src.expert_panel import parse_model_configs
+                from src.core.expert_panel import parse_model_configs
                 for mc in parse_model_configs():
                     if mc.name == model_name or mc.model_name == model_name:
-                        client_kwargs = {"api_key": mc.api_key}
-                        if mc.base_url and mc.base_url.startswith('http'):
-                            client_kwargs["base_url"] = mc.base_url
-                        http_client = httpx.Client(verify=getattr(mc, 'verify_ssl', config.openai_verify_ssl))
+                        endpoint = next((ep for ep in mc.endpoints if ep.enabled), None)
+                        if not endpoint:
+                            continue
+                        client_kwargs = {"api_key": endpoint.api_key}
+                        if endpoint.base_url and endpoint.base_url.startswith('http'):
+                            client_kwargs["base_url"] = endpoint.base_url
+                        http_client = httpx.Client(verify=getattr(endpoint, 'verify_ssl', config.openai_verify_ssl))
                         client_kwargs["http_client"] = http_client
                         client = OpenAI(**client_kwargs)
                         logger.info(f"[对话] 使用多模型配置: {mc.name} ({mc.model_name})")
@@ -625,3 +628,71 @@ class ChatService:
         
         client = OpenAI(**client_kwargs)
         return client, actual_model
+
+    def update_message(self, message_id: int, content: str) -> Optional[Dict[str, Any]]:
+        """更新消息内容，返回更新后的消息信息"""
+        with self._db.get_session() as session:
+            msg = session.query(ChatMessage).get(message_id)
+            if not msg:
+                return None
+
+            msg.content = content
+            msg.updated_at = datetime.now()
+            session.commit()
+
+            return {
+                "id": msg.id,
+                "session_id": msg.session_id,
+                "role": msg.role,
+                "content": msg.content,
+                "model_name": msg.model_name,
+                "updated_at": msg.updated_at.isoformat() if msg.updated_at else None,
+            }
+
+    def delete_messages_after(self, session_id: str, message_id: int) -> int:
+        """删除指定消息之后的所有消息，返回删除数量"""
+        with self._db.get_session() as session:
+            # 获取目标消息的时间戳
+            target_msg = session.query(ChatMessage).filter(
+                ChatMessage.id == message_id,
+                ChatMessage.session_id == session_id
+            ).first()
+
+            if not target_msg:
+                return 0
+
+            # 删除该消息之后的所有消息
+            result = session.query(ChatMessage).filter(
+                ChatMessage.session_id == session_id,
+                ChatMessage.created_at > target_msg.created_at
+            ).delete(synchronize_session=False)
+
+            # 更新会话消息计数
+            chat_session = session.query(ChatSession).get(session_id)
+            if chat_session:
+                chat_session.message_count = session.query(ChatMessage).filter(
+                    ChatMessage.session_id == session_id
+                ).count()
+                chat_session.updated_at = datetime.now()
+
+            session.commit()
+            return result
+
+    def get_message(self, message_id: int) -> Optional[Dict[str, Any]]:
+        """获取单个消息详情"""
+        with self._db.get_session() as session:
+            msg = session.query(ChatMessage).get(message_id)
+            if not msg:
+                return None
+
+            return {
+                "id": msg.id,
+                "session_id": msg.session_id,
+                "role": msg.role,
+                "content": msg.content,
+                "model_name": msg.model_name,
+                "token_count": msg.token_count,
+                "response_time_ms": msg.response_time_ms,
+                "created_at": msg.created_at.isoformat() if msg.created_at else None,
+                "updated_at": msg.updated_at.isoformat() if msg.updated_at else None,
+            }

@@ -53,11 +53,23 @@ class ExpertPanelRequest(BaseModel):
         }
 
 
+class EndpointInfo(BaseModel):
+    """Endpoint 详细信息"""
+    id: str = Field(..., description="endpoint 唯一标识")
+    label: Optional[str] = Field(None, description="显示标签（如 OpenAI官方、Azure、代理A）")
+    source_name: Optional[str] = Field(None, description="原始配置名称")
+    priority: int = Field(0, description="优先级")
+    enabled: bool = Field(True, description="是否启用")
+
+
 class ModelInfo(BaseModel):
     """模型信息"""
     name: str = Field(..., description="模型显示名称")
     provider: str = Field(..., description="模型提供方 (gemini / openai)")
     model_name: Optional[str] = Field(None, description="底层模型标识")
+    endpoint_count: int = Field(0, description="endpoint 总数")
+    enabled_endpoint_count: int = Field(0, description="可用 endpoint 数")
+    endpoints: Optional[List[EndpointInfo]] = Field(None, description="endpoint 详情列表（展开时返回）")
 
 
 class ModelListResponse(BaseModel):
@@ -77,7 +89,10 @@ class ModelResultResponse(BaseModel):
     confidence: Optional[str] = None
     elapsed_seconds: float = 0.0
     error: Optional[str] = None
-    raw_result: Optional[Dict[str, Any]] = None  # Include raw result
+    raw_result: Optional[Dict[str, Any]] = None
+    endpoint_tried: List[str] = Field(default_factory=list)
+    endpoint_used: Optional[str] = None
+    fallback_count: int = 0
 
 
 class ExpertPanelResponse(BaseModel):
@@ -102,21 +117,47 @@ class ExpertPanelResponse(BaseModel):
     response_model=ModelListResponse,
     summary="获取已配置的 AI 模型列表",
 )
-async def get_available_models():
+async def get_available_models(
+    expand_endpoints: bool = False,
+):
     """
     返回当前系统中已配置且可用的 AI 模型列表。
 
     前端可用此接口展示模型选择勾选框。
+
+    Args:
+        expand_endpoints: 是否展开返回 endpoint 详情列表
     """
+    from src.core.expert_panel import _extract_host_label
+
     configs = parse_model_configs()
-    models = [
-        ModelInfo(
-            name=c.name,
+    models = []
+    for c in configs:
+        endpoint_infos = None
+        if expand_endpoints:
+            endpoint_infos = []
+            for ep in c.endpoints:
+                # 优先使用 source_name 作为 label，其次是 host label，最后是 endpoint id
+                label = ep.source_name or _extract_host_label(ep.base_url) or ep.id
+                endpoint_infos.append(
+                    EndpointInfo(
+                        id=ep.id,
+                        label=label,
+                        source_name=ep.source_name,
+                        priority=ep.priority,
+                        enabled=ep.enabled,
+                    )
+                )
+
+        models.append(ModelInfo(
+            name=c.name,  # 现在这是 model_name (如 gpt-4)
             provider=c.provider,
             model_name=c.model_name,
-        )
-        for c in configs
-    ]
+            endpoint_count=len(c.endpoints),
+            enabled_endpoint_count=len([ep for ep in c.endpoints if ep.enabled]),
+            endpoints=endpoint_infos,
+        ))
+
     return ModelListResponse(models=models, max_models=MAX_MODELS)
 
 
@@ -219,6 +260,9 @@ async def trigger_expert_panel(request: ExpertPanelRequest):
                     elapsed_seconds=r.elapsed_seconds,
                     error=r.error,
                     raw_result=r.raw_result,
+                    endpoint_tried=r.endpoint_tried,
+                    endpoint_used=r.endpoint_used,
+                    fallback_count=r.fallback_count,
                 )
                 for r in result.model_results
             ],

@@ -154,8 +154,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         '--port',
         type=int,
-        default=8000,
-        help='FastAPI 服务端口（默认 8000）'
+        default=8888,
+        help='FastAPI 服务端口（默认 8888）'
     )
 
     parser.add_argument(

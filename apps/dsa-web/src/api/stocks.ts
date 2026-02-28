@@ -119,5 +119,58 @@ export const stockApi = {
             `/api/v1/stocks/${code}/refresh_info`
         );
         return toCamelCase<{ status: string; name: string }>(response.data);
-    }
+    },
+
+    /**
+     * 获取股票历史行情数据
+     */
+    getHistory: async (code: string, days: number = 30): Promise<{
+        stockCode: string;
+        stockName?: string;
+        period: string;
+        data: Array<{
+            date: string;
+            open: number;
+            high: number;
+            low: number;
+            close: number;
+            volume?: number;
+            amount?: number;
+            changePercent?: number;
+        }>;
+    }> => {
+        const response = await apiClient.get<{
+            stock_code: string;
+            stock_name?: string;
+            period: string;
+            data: Array<{
+                date: string;
+                open: number;
+                high: number;
+                low: number;
+                close: number;
+                volume?: number;
+                amount?: number;
+                change_percent?: number;
+            }>;
+        }>(
+            `/api/v1/stocks/${encodeURIComponent(code)}/history`,
+            { params: { period: 'daily', days } }
+        );
+        return {
+            stockCode: response.data.stock_code,
+            stockName: response.data.stock_name,
+            period: response.data.period,
+            data: response.data.data.map(item => ({
+                date: item.date,
+                open: item.open,
+                high: item.high,
+                low: item.low,
+                close: item.close,
+                volume: item.volume,
+                amount: item.amount,
+                changePercent: item.change_percent,
+            })),
+        };
+    },
 };

@@ -1,7 +1,7 @@
 from datetime import datetime
+import json
 import logging
 import re
-import httpx
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from pathlib import Path
 
@@ -196,6 +196,8 @@ class SystemConfigService:
     @staticmethod
     def fetch_openai_models(api_key: str, base_url: Optional[str] = None) -> List[str]:
         """Fetch available models from an OpenAI-compatible provider."""
+        import httpx
+
         if not api_key or api_key.startswith("your_"):
             return []
 
@@ -402,6 +404,258 @@ class SystemConfigService:
         return issues
 
     @staticmethod
+    def _validate_extra_ai_models(extra_models_raw: str) -> List[Dict[str, Any]]:
+        issues: List[Dict[str, Any]] = []
+
+        value = (extra_models_raw or "").strip()
+        if not value:
+            return issues
+
+        try:
+            parsed = json.loads(value)
+        except Exception as exc:
+            return [
+                {
+                    "key": "EXTRA_AI_MODELS",
+                    "code": "invalid_json",
+                    "message": "EXTRA_AI_MODELS must be valid JSON array",
+                    "severity": "error",
+                    "expected": "JSON array",
+                    "actual": str(exc),
+                }
+            ]
+
+        if not isinstance(parsed, list):
+            return [
+                {
+                    "key": "EXTRA_AI_MODELS",
+                    "code": "invalid_type",
+                    "message": "EXTRA_AI_MODELS must be a JSON array",
+                    "severity": "error",
+                    "expected": "array",
+                    "actual": type(parsed).__name__,
+                }
+            ]
+
+        for idx, item in enumerate(parsed):
+            item_key = f"EXTRA_AI_MODELS[{idx}]"
+            if not isinstance(item, dict):
+                issues.append(
+                    {
+                        "key": item_key,
+                        "code": "invalid_type",
+                        "message": "Each model item must be an object",
+                        "severity": "error",
+                        "expected": "object",
+                        "actual": type(item).__name__,
+                    }
+                )
+                continue
+
+            provider = (item.get("provider") or "").strip()
+            model = (item.get("model") or item.get("model_name") or "").strip()
+            name = (item.get("name") or "").strip()
+
+            if not provider:
+                issues.append(
+                    {
+                        "key": item_key,
+                        "code": "missing_field",
+                        "message": "provider is required",
+                        "severity": "error",
+                        "expected": "non-empty provider",
+                        "actual": provider,
+                    }
+                )
+
+            if not model:
+                issues.append(
+                    {
+                        "key": item_key,
+                        "code": "missing_field",
+                        "message": "model is required",
+                        "severity": "error",
+                        "expected": "non-empty model",
+                        "actual": model,
+                    }
+                )
+
+            if not name and not model:
+                base_url_hint = (item.get("base_url") or "").strip()
+                if not base_url_hint:
+                    issues.append(
+                        {
+                            "key": item_key,
+                            "code": "auto_name_fallback",
+                            "message": "name is empty and base_url/model are missing; default provider name will be used",
+                            "severity": "warning",
+                            "expected": "name or model/base_url",
+                            "actual": "",
+                        }
+                    )
+
+            raw_endpoints = item.get("endpoints")
+            if isinstance(raw_endpoints, list):
+                if len(raw_endpoints) == 0:
+                    issues.append(
+                        {
+                            "key": f"{item_key}.endpoints",
+                            "code": "invalid_value",
+                            "message": "endpoints must contain at least one endpoint",
+                            "severity": "error",
+                            "expected": "non-empty array",
+                            "actual": "[]",
+                        }
+                    )
+                    continue
+
+                enabled_count = 0
+                for ep_idx, ep in enumerate(raw_endpoints):
+                    ep_key = f"{item_key}.endpoints[{ep_idx}]"
+                    if not isinstance(ep, dict):
+                        issues.append(
+                            {
+                                "key": ep_key,
+                                "code": "invalid_type",
+                                "message": "endpoint must be an object",
+                                "severity": "error",
+                                "expected": "object",
+                                "actual": type(ep).__name__,
+                            }
+                        )
+                        continue
+
+                    enabled = ep.get("enabled", True)
+                    if isinstance(enabled, str):
+                        enabled = enabled.strip().lower() in {"true", "1", "yes", "on"}
+                    elif not isinstance(enabled, bool):
+                        enabled = True
+
+                    if enabled:
+                        enabled_count += 1
+
+                    api_key = (ep.get("api_key") or "").strip()
+                    if not api_key:
+                        issues.append(
+                            {
+                                "key": ep_key,
+                                "code": "missing_field",
+                                "message": "endpoint api_key is required",
+                                "severity": "error",
+                                "expected": "non-empty api_key",
+                                "actual": "",
+                            }
+                        )
+
+                    verify_ssl = ep.get("verify_ssl")
+                    if isinstance(verify_ssl, str):
+                        issues.append(
+                            {
+                                "key": ep_key,
+                                "code": "string_boolean",
+                                "message": "verify_ssl should be boolean, string value is deprecated",
+                                "severity": "warning",
+                                "expected": "boolean",
+                                "actual": verify_ssl,
+                            }
+                        )
+
+                    temperature = ep.get("temperature")
+                    if temperature not in (None, ""):
+                        try:
+                            temp_num = float(temperature)
+                            if temp_num < 0 or temp_num > 2:
+                                issues.append(
+                                    {
+                                        "key": ep_key,
+                                        "code": "out_of_range",
+                                        "message": "temperature should be between 0 and 2",
+                                        "severity": "error",
+                                        "expected": "0~2",
+                                        "actual": str(temperature),
+                                    }
+                                )
+                        except (TypeError, ValueError):
+                            issues.append(
+                                {
+                                    "key": ep_key,
+                                    "code": "invalid_type",
+                                    "message": "temperature must be a number",
+                                    "severity": "error",
+                                    "expected": "number",
+                                    "actual": str(temperature),
+                                }
+                            )
+
+                if enabled_count == 0:
+                    issues.append(
+                        {
+                            "key": f"{item_key}.endpoints",
+                            "code": "missing_enabled_endpoint",
+                            "message": "at least one enabled endpoint is required",
+                            "severity": "error",
+                            "expected": "enabled=true endpoint",
+                            "actual": "all disabled",
+                        }
+                    )
+            else:
+                # 旧格式兼容校验
+                api_key = (item.get("api_key") or "").strip()
+                if not api_key:
+                    issues.append(
+                        {
+                            "key": item_key,
+                            "code": "missing_field",
+                            "message": "api_key is required in legacy format",
+                            "severity": "error",
+                            "expected": "non-empty api_key",
+                            "actual": "",
+                        }
+                    )
+
+                verify_ssl = item.get("verify_ssl")
+                if isinstance(verify_ssl, str):
+                    issues.append(
+                        {
+                            "key": item_key,
+                            "code": "string_boolean",
+                            "message": "verify_ssl should be boolean, string value is deprecated",
+                            "severity": "warning",
+                            "expected": "boolean",
+                            "actual": verify_ssl,
+                        }
+                    )
+
+                temperature = item.get("temperature")
+                if temperature not in (None, ""):
+                    try:
+                        temp_num = float(temperature)
+                        if temp_num < 0 or temp_num > 2:
+                            issues.append(
+                                {
+                                    "key": item_key,
+                                    "code": "out_of_range",
+                                    "message": "temperature should be between 0 and 2",
+                                    "severity": "error",
+                                    "expected": "0~2",
+                                    "actual": str(temperature),
+                                }
+                            )
+                    except (TypeError, ValueError):
+                        issues.append(
+                            {
+                                "key": item_key,
+                                "code": "invalid_type",
+                                "message": "temperature must be a number",
+                                "severity": "error",
+                                "expected": "number",
+                                "actual": str(temperature),
+                            }
+                        )
+
+        return issues
+
+    @staticmethod
     def _validate_cross_field(effective_map: Dict[str, str], updated_keys: Set[str]) -> List[Dict[str, Any]]:
         """Validate dependencies across multiple keys."""
         issues: List[Dict[str, Any]] = []
@@ -421,5 +675,8 @@ class SystemConfigService:
                     "actual": chat_id_value,
                 }
             )
+
+        if "EXTRA_AI_MODELS" in updated_keys:
+            issues.extend(SystemConfigService._validate_extra_ai_models(effective_map.get("EXTRA_AI_MODELS", "")))
 
         return issues

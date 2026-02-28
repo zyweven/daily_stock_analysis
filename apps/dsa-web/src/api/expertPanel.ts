@@ -3,10 +3,21 @@ import { toCamelCase } from './utils';
 
 // ============ 类型定义 ============
 
+export interface EndpointInfo {
+    id: string;
+    label: string | null;
+    sourceName: string | null;
+    priority: number;
+    enabled: boolean;
+}
+
 export interface ModelInfo {
     name: string;
     provider: string;
     modelName: string | null;
+    endpointCount?: number;
+    enabledEndpointCount?: number;
+    endpoints?: EndpointInfo[];
 }
 
 export interface ModelListResponse {
@@ -29,7 +40,10 @@ export interface ModelResultItem {
     confidence: string | null;
     elapsedSeconds: number;
     error: string | null;
-    rawResult?: any; // Contains specific strategy data
+    rawResult?: any;
+    endpointTried?: string[];
+    endpointUsed?: string | null;
+    fallbackCount?: number;
 }
 
 export interface ExpertPanelResponse {
@@ -49,10 +63,12 @@ export interface ExpertPanelResponse {
 export const expertPanelApi = {
     /**
      * 获取已配置的可用模型列表
+     * @param expandEndpoints 是否展开返回 endpoint 详情
      */
-    getModels: async (): Promise<ModelListResponse> => {
+    getModels: async (expandEndpoints: boolean = false): Promise<ModelListResponse> => {
         const response = await apiClient.get<Record<string, unknown>>(
-            '/api/v1/expert-panel/models'
+            '/api/v1/expert-panel/models',
+            { params: { expand_endpoints: expandEndpoints } }
         );
         return toCamelCase<ModelListResponse>(response.data);
     },

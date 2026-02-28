@@ -73,6 +73,25 @@ export async function updateChatSession(sessionId: string, data: { title?: strin
 }
 
 
+// === 消息管理 API ===
+
+export async function updateChatMessage(messageId: number, content: string): Promise<ChatMessage> {
+    const response = await apiClient.put(`/api/v1/chat/messages/${messageId}`, { content });
+    return toCamelCase(response.data.data);
+}
+
+export async function regenerateAfterMessage(
+    messageId: number,
+    sessionId: string,
+    modelName?: string
+): Promise<{ success: boolean; deletedCount: number; message: string }> {
+    const response = await apiClient.post(`/api/v1/chat/messages/${messageId}/regenerate`, null, {
+        params: { session_id: sessionId, model_name: modelName }
+    });
+    return toCamelCase(response.data);
+}
+
+
 // === SSE 流式对话 ===
 
 /**

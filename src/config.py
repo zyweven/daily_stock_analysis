@@ -14,8 +14,46 @@ import os
 import re
 from pathlib import Path
 from typing import List, Optional, Tuple
-from dotenv import load_dotenv, dotenv_values
 from dataclasses import dataclass, field
+
+try:
+    from dotenv import load_dotenv, dotenv_values
+except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test envs
+    def _parse_dotenv_file(dotenv_path: Path) -> dict[str, str]:
+        if not dotenv_path.exists():
+            return {}
+
+        values: dict[str, str] = {}
+        for raw_line in dotenv_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+
+            if value and value[0] == value[-1] and value[0] in {'"', "'"}:
+                value = value[1:-1]
+
+            values[key] = value
+        return values
+
+    def dotenv_values(dotenv_path=None, *args, **kwargs):
+        if dotenv_path is None:
+            return {}
+        return _parse_dotenv_file(Path(dotenv_path))
+
+    def load_dotenv(dotenv_path=None, override=False, *args, **kwargs):
+        if dotenv_path is None:
+            return False
+
+        loaded_any = False
+        for key, value in _parse_dotenv_file(Path(dotenv_path)).items():
+            if override or key not in os.environ:
+                os.environ[key] = value
+                loaded_any = True
+        return loaded_any
 
 
 def setup_env(override: bool = False):

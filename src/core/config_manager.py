@@ -12,7 +12,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
-from dotenv import dotenv_values
+try:
+    from dotenv import dotenv_values
+except ModuleNotFoundError:  # pragma: no cover - fallback for minimal test envs
+    def dotenv_values(dotenv_path=None, *args, **kwargs):
+        if dotenv_path is None:
+            return {}
+
+        env_path = Path(dotenv_path)
+        if not env_path.exists():
+            return {}
+
+        values: Dict[str, str] = {}
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip()
+            if value and value[0] == value[-1] and value[0] in {'"', "'"}:
+                value = value[1:-1]
+            values[key] = value
+
+        return values
 
 _ASSIGNMENT_PATTERN = re.compile(r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
 _FALLBACK_REWRITE_ERRNOS = {errno.EBUSY, errno.EXDEV}

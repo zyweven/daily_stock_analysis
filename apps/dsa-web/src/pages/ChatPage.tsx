@@ -17,6 +17,8 @@ import {
     getChatSessionDetail,
     deleteChatSession,
     sendChatMessage,
+    updateChatMessage,
+    regenerateAfterMessage,
     TOOL_NAME_MAP,
 } from '../api/chat';
 import { expertPanelApi } from '../api/expertPanel';
@@ -74,7 +76,12 @@ export default function ChatPage() {
     // 确认删除状态
     const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
+    // 编辑消息状态
+    const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+    const [editingContent, setEditingContent] = useState('');
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
     const navigate = useNavigate();
 
@@ -700,50 +707,122 @@ export default function ChatPage() {
                                         </div>
                                     )}
 
-                                    {/* 消息内容：Markdown 渲染 */}
-                                    <div className="text-sm md:text-base leading-relaxed">
-                                        {msg.role === 'assistant' ? (
-                                            <div className="markdown-body dark-mode">
-                                                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                    {/* 消息内容：Markdown 渲染 或 编辑框 */}
+                                    {editingMessageId === msg.id ? (
+                                        <div className="space-y-2">
+                                            <textarea
+                                                ref={editTextareaRef}
+                                                value={editingContent}
+                                                onChange={(e) => setEditingContent(e.target.value)}
+                                                className="w-full px-3 py-2 bg-gray-900/50 border border-blue-500/30 rounded-lg text-sm text-white focus:outline-none focus:border-blue-500 resize-none min-h-[80px]"
+                                                autoFocus
+                                            />
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={async () => {
+                                                        if (!msg.id || !currentSessionId) return;
+                                                        try {
+                                                            // 更新消息
+                                                            await updateChatMessage(msg.id, editingContent);
+
+                                                            // 删除该消息之后的所有消息
+                                                            await regenerateAfterMessage(msg.id, currentSessionId, selectedModel);
+
+                                                            // 刷新会话
+                                                            await loadSession(currentSessionId);
+
+                                                            setEditingMessageId(null);
+                                                            toast.success('消息已更新');
+                                                        } catch (error) {
+                                                            console.error('更新消息失败:', error);
+                                                            toast.error('更新失败');
+                                                        }
+                                                    }}
+                                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded transition-colors"
+                                                >
+                                                    保存并重新生成
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingMessageId(null);
+                                                        setEditingContent('');
+                                                    }}
+                                                    className="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs rounded transition-colors"
+                                                >
+                                                    取消
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="text-sm md:text-base leading-relaxed">
+                                            {msg.role === 'assistant' ? (
+                                                <div className="markdown-body dark-mode">
+                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                                                        {msg.content}
+                                                    </ReactMarkdown>
+                                                    {msg.isStreaming && <span className="inline-block w-2 h-4 bg-blue-400 ml-1 animate-pulse" />}
+                                                </div>
+                                            ) : (
+                                                <div className="whitespace-pre-wrap break-words font-sans">
                                                     {msg.content}
-                                                </ReactMarkdown>
-                                                {msg.isStreaming && <span className="inline-block w-2 h-4 bg-blue-400 ml-1 animate-pulse" />}
-                                            </div>
-                                        ) : (
-                                            <div className="whitespace-pre-wrap break-words font-sans">
-                                                {msg.content}
-                                            </div>
-                                        )}
-                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* 元信息 + 操作按钮 */}
-                                {msg.role === 'assistant' && !msg.isStreaming && (
+                                {!msg.isStreaming && (
                                     <div className="flex items-center gap-3 text-[10px] text-gray-500 mt-2 px-2 opacity-60 hover:opacity-100 transition-opacity">
-                                        {msg.responseTimeMs && (
-                                            <span className="flex items-center gap-1">⚡ {(msg.responseTimeMs / 1000).toFixed(1)}s</span>
+                                        {/* 模型名称 - 仅AI消息显示 */}
+                                        {msg.role === 'assistant' && msg.modelName && (
+                                            <span className="flex items-center gap-1 text-blue-400/80">
+                                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                                                </svg>
+                                                {msg.modelName}
+                                            </span>
                                         )}
-                                        {msg.toolCalls && msg.toolCalls.length > 0 && (
-                                            <span>•</span>
+                                        {msg.role === 'assistant' && msg.responseTimeMs && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="flex items-center gap-1">⚡ {(msg.responseTimeMs / 1000).toFixed(1)}s</span>
+                                            </>
                                         )}
-                                        {msg.toolCalls && msg.toolCalls.length > 0 && (
-                                            <span className="flex items-center gap-1">🛠 {msg.toolCalls.length} tools</span>
+                                        {msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0 && (
+                                            <>
+                                                <span>•</span>
+                                                <span className="flex items-center gap-1">🛠 {msg.toolCalls.length} tools</span>
+                                            </>
                                         )}
-                                        {/* 一键复制 */}
+                                        {/* 编辑按钮 - 用户和AI消息都显示 */}
                                         <button
                                             onClick={() => {
-                                                navigator.clipboard.writeText(msg.content).then(() => {
-                                                    setCopiedMsgIdx(idx);
-                                                    setTimeout(() => setCopiedMsgIdx(null), 2000);
-                                                });
+                                                setEditingMessageId(msg.id || null);
+                                                setEditingContent(msg.content);
                                             }}
-                                            className="ml-1 flex items-center gap-1 hover:text-green-400 transition-colors"
-                                            title="复制内容"
+                                            className="flex items-center gap-1 hover:text-yellow-400 transition-colors"
+                                            title="编辑消息"
                                         >
-                                            {copiedMsgIdx === idx ? '✅ 已复制' : '📋 复制'}
+                                            ✏️ 编辑
                                         </button>
+                                        {/* 一键复制 - 仅AI消息 */}
+                                        {msg.role === 'assistant' && (
+                                            <button
+                                                onClick={() => {
+                                                    navigator.clipboard.writeText(msg.content).then(() => {
+                                                        setCopiedMsgIdx(idx);
+                                                        setTimeout(() => setCopiedMsgIdx(null), 2000);
+                                                    });
+                                                }}
+                                                className="flex items-center gap-1 hover:text-green-400 transition-colors"
+                                                title="复制内容"
+                                            >
+                                                {copiedMsgIdx === idx ? '✅ 已复制' : '📋 复制'}
+                                            </button>
+                                        )}
                                         {/* 重试按钮：仅最后一条 AI 回复显示 */}
-                                        {idx === messages.length - 1 && !isStreaming && (
+                                        {msg.role === 'assistant' && idx === messages.length - 1 && !isStreaming && (
                                             <button
                                                 onClick={handleRetry}
                                                 className="flex items-center gap-1 hover:text-blue-400 transition-colors"

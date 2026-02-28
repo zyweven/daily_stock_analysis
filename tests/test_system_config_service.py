@@ -4,6 +4,7 @@
 import os
 import tempfile
 import unittest
+import json
 from pathlib import Path
 
 from src.config import Config
@@ -72,6 +73,60 @@ class SystemConfigServiceTestCase(unittest.TestCase):
         validation = self.service.validate(items=[{"key": "SCHEDULE_TIME", "value": "25:70"}])
         self.assertFalse(validation["valid"])
         self.assertTrue(any(issue["code"] == "invalid_format" for issue in validation["issues"]))
+
+    def test_validate_extra_ai_models_rejects_invalid_json(self) -> None:
+        validation = self.service.validate(items=[{"key": "EXTRA_AI_MODELS", "value": "{not-json}"}])
+        self.assertFalse(validation["valid"])
+        self.assertTrue(any(issue["code"] == "invalid_json" for issue in validation["issues"]))
+
+    def test_validate_extra_ai_models_rejects_empty_endpoints(self) -> None:
+        payload = json.dumps([
+            {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "endpoints": [],
+            }
+        ])
+        validation = self.service.validate(items=[{"key": "EXTRA_AI_MODELS", "value": payload}])
+        self.assertFalse(validation["valid"])
+        self.assertTrue(any(issue["code"] == "invalid_value" for issue in validation["issues"]))
+
+    def test_validate_extra_ai_models_rejects_missing_endpoint_key(self) -> None:
+        payload = json.dumps([
+            {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "endpoints": [{"id": "ep1", "enabled": True}],
+            }
+        ])
+        validation = self.service.validate(items=[{"key": "EXTRA_AI_MODELS", "value": payload}])
+        self.assertFalse(validation["valid"])
+        self.assertTrue(any(issue["code"] == "missing_field" for issue in validation["issues"]))
+
+    def test_validate_extra_ai_models_rejects_temperature_out_of_range(self) -> None:
+        payload = json.dumps([
+            {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "endpoints": [{"id": "ep1", "enabled": True, "api_key": "sk-test", "temperature": 3}],
+            }
+        ])
+        validation = self.service.validate(items=[{"key": "EXTRA_AI_MODELS", "value": payload}])
+        self.assertFalse(validation["valid"])
+        self.assertTrue(any(issue["code"] == "out_of_range" for issue in validation["issues"]))
+
+    def test_validate_extra_ai_models_warns_string_verify_ssl(self) -> None:
+        payload = json.dumps([
+            {
+                "provider": "openai",
+                "model": "gpt-4o",
+                "api_key": "sk-test",
+                "verify_ssl": "false",
+            }
+        ])
+        validation = self.service.validate(items=[{"key": "EXTRA_AI_MODELS", "value": payload}])
+        warnings = [issue for issue in validation["issues"] if issue["severity"] == "warning"]
+        self.assertTrue(any(issue["code"] == "string_boolean" for issue in warnings))
 
     def test_update_raises_conflict_for_stale_version(self) -> None:
         with self.assertRaises(ConfigConflictError):

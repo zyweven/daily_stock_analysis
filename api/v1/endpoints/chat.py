@@ -43,6 +43,11 @@ class SessionUpdateRequest(BaseModel):
     current_agent_config: Optional[dict] = Field(None, description="更新会话的 Agent 配置")
 
 
+class MessageUpdateRequest(BaseModel):
+    """更新消息请求"""
+    content: str = Field(..., min_length=1, max_length=5000, description="新的消息内容")
+
+
 # === SSE 流式对话 ===
 
 @router.post("/send")
@@ -130,8 +135,62 @@ async def update_session(session_id: str, request: SessionUpdateRequest):
     update_data = request.model_dump(exclude_none=True)
     if not update_data:
         raise HTTPException(status_code=400, detail="无更新内容")
-    
+
     result = svc.update_session(session_id, **update_data)
     if not result:
         raise HTTPException(status_code=404, detail="会话不存在")
     return result
+
+
+# === 消息管理 ===
+
+@router.put("/messages/{message_id}")
+async def update_message(message_id: int, request: MessageUpdateRequest):
+    """更新指定消息的内容"""
+    svc = ChatService()
+
+    # 检查消息是否存在
+    msg = svc.get_message(message_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="消息不存在")
+
+    result = svc.update_message(message_id, request.content)
+    if not result:
+        raise HTTPException(status_code=500, detail="更新失败")
+
+    return {"success": True, "message": "消息已更新", "data": result}
+
+
+@router.post("/messages/{message_id}/regenerate")
+async def regenerate_after_message(
+    message_id: int,
+    session_id: str = Query(..., description="会话ID"),
+    model_name: Optional[str] = Query(None, description="指定模型名称")
+):
+    """
+    从指定消息重新生成后续对话
+
+    流程：
+    1. 删除该消息之后的所有消息
+    2. 根据消息角色决定如何重新生成：
+       - 如果是用户消息：直接重新生成AI回复
+       - 如果是AI消息：需要先重新生成该AI消息（用户需先编辑）
+    """
+    svc = ChatService()
+
+    # 检查消息是否存在
+    msg = svc.get_message(message_id)
+    if not msg:
+        raise HTTPException(status_code=404, detail="消息不存在")
+
+    if msg["session_id"] != session_id:
+        raise HTTPException(status_code=400, detail="消息与会话不匹配")
+
+    # 删除该消息之后的所有消息
+    deleted_count = svc.delete_messages_after(session_id, message_id)
+
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "message": f"已删除后续 {deleted_count} 条消息，请重新发送消息继续对话"
+    }
