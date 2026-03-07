@@ -22,6 +22,7 @@ export const analysisApi = {
       report_type: data.reportType || 'detailed',
       force_refresh: data.forceRefresh || false,
       async_mode: data.asyncMode || false,
+      model_name: data.modelName,
     };
 
     const response = await apiClient.post<Record<string, unknown>>(
@@ -51,6 +52,7 @@ export const analysisApi = {
       report_type: data.reportType || 'detailed',
       force_refresh: data.forceRefresh || false,
       async_mode: true,
+      model_name: data.modelName,
     };
 
     const response = await apiClient.post<Record<string, unknown>>(

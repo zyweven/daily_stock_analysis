@@ -11,6 +11,8 @@ import { useAnalysisStore } from '../stores/analysisStore';
 import { ReportSummary } from '../components/report';
 import { TaskPanel } from '../components/tasks';
 import { useTaskStream } from '../hooks';
+import { expertPanelApi } from '../api/expertPanel';
+import type { ModelInfo } from '../api/expertPanel';
 
 // ============ 类型定义 ============
 
@@ -27,9 +29,13 @@ interface StockHistory {
 // ============ 工具函数 ============
 
 // 按股票分组历史记录
-function groupHistoryByStock(items: HistoryItem[], watchlist: StockInfo[] = []): StockHistory[] {
+function groupHistoryByStock(items: HistoryItem[] | undefined, watchlist: StockInfo[] = []): StockHistory[] {
   const stockMap = new Map<string, StockHistory>();
   const watchlistCodes = new Set(watchlist.map(s => s.code));
+
+  if (!Array.isArray(items)) {
+    return [];
+  }
 
   items.forEach(item => {
     if (!stockMap.has(item.stockCode)) {
@@ -106,7 +112,7 @@ const WatchlistDropdown: React.FC<{
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  if (stocks.length === 0) return null;
+  if (!Array.isArray(stocks) || stocks.length === 0) return null;
 
   // 紧凑模式：只有图标和下拉箭头
   if (variant === 'compact') {
@@ -233,7 +239,7 @@ const StockHistoryList: React.FC<{
 
   // 排序和筛选逻辑
   const filteredStocks = useMemo<StockHistory[]>(() => {
-    if (!stocks || stocks.length === 0) return [];
+    if (!Array.isArray(stocks) || stocks.length === 0) return [];
 
     // 先复制数组避免修改原数组
     let result = [...stocks];
@@ -273,7 +279,7 @@ const StockHistoryList: React.FC<{
   if (isLoading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <div className="w-5 h-5 border-2 border-cyan/20 border-t-cyan rounded-full animate-spin" />
+        <div className="w-5 h-5 border-2 border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
       </div>
     );
   }
@@ -522,6 +528,11 @@ const HomePage: React.FC = () => {
   const [inputError, setInputError] = useState<string>();
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
 
+  // 模型选择状态
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+
   // 历史列表状态
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
@@ -543,9 +554,26 @@ const HomePage: React.FC = () => {
   const [selectedStockCode, setSelectedStockCode] = useState<string | null>(null);
 
   const analysisRequestIdRef = useRef<number>(0);
+  const timeoutIdsRef = useRef<Set<number>>(new Set());
 
   // 计算按股票分组的历史
   const stockHistories = useMemo(() => groupHistoryByStock(historyItems, watchlist), [historyItems, watchlist]);
+
+  // 安全设置 timeout 并跟踪 ID
+  const safeSetTimeout = useCallback((callback: () => void, delay: number) => {
+    const id = window.setTimeout(() => {
+      timeoutIdsRef.current.delete(id);
+      callback();
+    }, delay);
+    timeoutIdsRef.current.add(id);
+    return id;
+  }, []);
+
+  // 清理所有 timeout
+  const clearAllTimeouts = useCallback(() => {
+    timeoutIdsRef.current.forEach(id => clearTimeout(id));
+    timeoutIdsRef.current.clear();
+  }, []);
 
   // SSE 任务流
   useTaskStream({
@@ -557,29 +585,60 @@ const HomePage: React.FC = () => {
     },
     onTaskCompleted: (task) => {
       fetchHistory();
-      setTimeout(() => setActiveTasks(prev => prev.filter(t => t.taskId !== task.taskId)), 2000);
+      safeSetTimeout(() => setActiveTasks(prev => prev.filter(t => t.taskId !== task.taskId)), 2000);
     },
     onTaskFailed: (task) => {
       setActiveTasks(prev => prev.map(t => t.taskId === task.taskId ? task : t));
       setStoreError(task.error || '分析失败');
-      setTimeout(() => setActiveTasks(prev => prev.filter(t => t.taskId !== task.taskId)), 5000);
+      safeSetTimeout(() => setActiveTasks(prev => prev.filter(t => t.taskId !== task.taskId)), 5000);
     },
     onError: () => console.warn('SSE 连接断开'),
     enabled: true,
   });
+
+  // 组件卸载时清理 timeout
+  useEffect(() => {
+    return () => {
+      clearAllTimeouts();
+    };
+  }, [clearAllTimeouts]);
 
   // 加载自选股
   const fetchWatchlist = useCallback(async () => {
     setIsLoadingWatchlist(true);
     try {
       const data = await stockApi.list(true);
-      setWatchlist(data);
+      setWatchlist(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch watchlist:', err);
+      setWatchlist([]);
     } finally {
       setIsLoadingWatchlist(false);
     }
   }, []);
+
+  // 加载可用模型列表
+  const fetchModels = useCallback(async () => {
+    setIsLoadingModels(true);
+    try {
+      const data = await expertPanelApi.getModels();
+      const modelsList = data.models || [];
+      setModels(modelsList);
+      // 设置默认模型（第一个有可用端点的模型）
+      const defaultModel = modelsList.find(m => (m.enabledEndpointCount || 0) > 0);
+      if (defaultModel && !selectedModel) {
+        setSelectedModel(defaultModel.name);
+      }
+    } catch (err) {
+      console.error('Failed to fetch models:', err);
+      // 如果获取失败，使用默认模型
+      if (!selectedModel) {
+        setSelectedModel('gemini-3-flash-preview');
+      }
+    } finally {
+      setIsLoadingModels(false);
+    }
+  }, [selectedModel]);
 
   // 加载历史
   const fetchHistory = useCallback(async (reset = true) => {
@@ -594,15 +653,20 @@ const HomePage: React.FC = () => {
         limit: pageSize,
       });
 
+      const items = Array.isArray(response?.items) ? response.items : [];
+
       if (reset) {
-        setHistoryItems(response.items);
+        setHistoryItems(items);
         setCurrentPage(1);
       } else {
-        setHistoryItems(prev => [...prev, ...response.items]);
+        setHistoryItems(prev => [...prev, ...items]);
         setCurrentPage(page);
       }
     } catch (err) {
       console.error('Failed to fetch history:', err);
+      if (reset) {
+        setHistoryItems([]);
+      }
     } finally {
       setIsLoadingHistory(false);
     }
@@ -663,13 +727,14 @@ const HomePage: React.FC = () => {
       const response = await analysisApi.analyzeAsync({
         stockCode: normalized,
         reportType: 'detailed',
+        modelName: selectedModel || undefined,
       });
 
       if (currentRequestId === analysisRequestIdRef.current) {
         setStockCode('');
       }
 
-      console.log('Task submitted:', response.taskId);
+      console.log('Task submitted:', response.taskId, selectedModel ? `(model: ${selectedModel})` : '');
     } catch (err) {
       console.error('Analysis failed:', err);
       if (currentRequestId === analysisRequestIdRef.current) {
@@ -692,10 +757,13 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // 初始加载
+  // 初始加载 - 只在组件挂载时执行一次
   useEffect(() => {
     fetchHistory(true);
     fetchWatchlist();
+    fetchModels();
+    // 注意：这些函数在 mount 时是稳定的，不需要在依赖数组中
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -719,9 +787,9 @@ const HomePage: React.FC = () => {
           <div className="flex-1" />
 
           {/* 输入区域 */}
-          <div className="flex items-center gap-2 max-w-lg flex-1">
+          <div className="flex items-center gap-2 flex-1 max-w-2xl">
             {/* 自选股快速选择 */}
-            <div className="relative" id="input-watchlist-dropdown">
+            <div className="relative flex-shrink-0" id="input-watchlist-dropdown">
               <WatchlistDropdown
                 stocks={watchlist}
                 onSelect={(code) => setStockCode(code)}
@@ -730,18 +798,20 @@ const HomePage: React.FC = () => {
               />
             </div>
 
-            <div className="flex-1 relative">
+            {/* 股票代码输入框 - 主要区域 */}
+            <div className="flex-1 relative min-w-[200px]">
               <input
                 type="text"
                 value={stockCode}
                 onChange={(e) => {
                   setStockCode(e.target.value.toUpperCase());
                   setInputError(undefined);
+                  setDuplicateError(null);
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder="输入股票代码或选择自选..."
+                placeholder="输入股票代码，如：600519"
                 disabled={isAnalyzing}
-                className={`input-terminal w-full ${inputError ? 'border-danger/50' : ''}`}
+                className={`input-terminal w-full text-base ${inputError ? 'border-danger/50' : ''}`}
               />
               {inputError && (
                 <p className="absolute -bottom-5 left-0 text-xs text-danger">{inputError}</p>
@@ -750,24 +820,58 @@ const HomePage: React.FC = () => {
                 <p className="absolute -bottom-5 left-0 text-xs text-warning">{duplicateError}</p>
               )}
             </div>
+
+            {/* 分析按钮 - 更显眼 */}
             <button
               type="button"
               onClick={handleAnalyze}
               disabled={!stockCode || isAnalyzing}
-              className="btn-primary flex items-center gap-1.5 whitespace-nowrap"
+              className="btn-primary flex items-center gap-1.5 whitespace-nowrap px-4 py-2"
             >
               {isAnalyzing ? (
                 <>
-                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   分析中
                 </>
               ) : (
-                '分析'
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                  分析
+                </>
               )}
             </button>
+
+            <div className="w-px h-6 bg-white/10 mx-1" />
+
+            {/* 模型选择 - 缩小并放在右侧 */}
+            <div className="flex items-center gap-1.5 flex-shrink-0">
+              <span className="text-xs text-slate-500">模型</span>
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                disabled={isAnalyzing || isLoadingModels}
+                className="input-terminal w-32 text-xs py-1.5"
+                title="选择分析模型"
+              >
+                {isLoadingModels ? (
+                  <option value="">加载...</option>
+                ) : (
+                  <>
+                    <option value="">默认</option>
+                    {models.filter(m => (m.enabledEndpointCount || 0) > 0).map(model => (
+                      <option key={model.name} value={model.name}>
+                        {model.modelName || model.name}
+                      </option>
+                    ))}
+                  </>
+                )}
+              </select>
+            </div>
           </div>
         </div>
       </header>
@@ -797,7 +901,7 @@ const HomePage: React.FC = () => {
         <section className="flex-1 overflow-y-auto p-4">
           {isLoadingReport ? (
             <div className="flex flex-col items-center justify-center h-full">
-              <div className="w-10 h-10 border-3 border-cyan/20 border-t-cyan rounded-full animate-spin" />
+              <div className="w-10 h-10 border-[3px] border-cyan-500/20 border-t-cyan-500 rounded-full animate-spin" />
               <p className="mt-3 text-secondary text-sm">加载报告中...</p>
             </div>
           ) : selectedReport ? (

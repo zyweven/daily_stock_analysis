@@ -26,19 +26,19 @@ class TaskStatusEnum(str, Enum):
 
 class AnalyzeRequest(BaseModel):
     """分析请求模型"""
-    
+
     stock_code: Optional[str] = Field(
-        None, 
-        description="单只股票代码", 
+        None,
+        description="单只股票代码",
         example="600519"
     )
     stock_codes: Optional[List[str]] = Field(
-        None, 
+        None,
         description="多只股票代码（与 stock_code 二选一）",
         example=["600519", "000858"]
     )
     report_type: str = Field(
-        "detailed", 
+        "detailed",
         description="报告类型",
         pattern="^(simple|detailed)$"
     )
@@ -50,14 +50,20 @@ class AnalyzeRequest(BaseModel):
         False,
         description="是否使用异步模式"
     )
-    
+    model_name: Optional[str] = Field(
+        None,
+        description="指定使用的模型名称（可选）",
+        example="gemini-3-flash-preview"
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
                 "stock_code": "600519",
                 "report_type": "detailed",
                 "force_refresh": False,
-                "async_mode": False
+                "async_mode": False,
+                "model_name": "gemini-3-flash-preview"
             }
         }
 

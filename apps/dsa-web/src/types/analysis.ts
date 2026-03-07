@@ -10,6 +10,7 @@ export interface AnalysisRequest {
   reportType?: 'simple' | 'detailed';
   forceRefresh?: boolean;
   asyncMode?: boolean;
+  modelName?: string;
 }
 
 // ============ 报告类型 ============

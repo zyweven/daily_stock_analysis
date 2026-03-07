@@ -14,6 +14,8 @@ export * from './agents';
 export * from './tools';
 export * from './chat';
 export * from './skills';
+export * from './stocks';
+export * from './portfolio';
 // Add others if needed or just specific ones
 
 export default apiClient;

@@ -143,3 +143,18 @@ class FetchModelsResponse(BaseModel):
     """Response containing discovered models."""
 
     models: List[str] = Field(..., description="List of available model IDs")
+
+
+class ModelInfo(BaseModel):
+    """Model information for frontend selection."""
+
+    name: str = Field(..., description="Model identifier/name")
+    display_name: str = Field(..., description="Human-readable display name")
+    provider: str = Field(..., description="Provider name (e.g., gemini, openai)")
+    enabled: bool = Field(True, description="Whether this model is available for use")
+
+
+class ModelsListResponse(BaseModel):
+    """Response containing available models for analysis."""
+
+    models: List[ModelInfo] = Field(..., description="List of available models")

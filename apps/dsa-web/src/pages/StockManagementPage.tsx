@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { stockApi } from '../api/stocks';
 import type { StockInfo } from '../api/stocks';
+import toast from 'react-hot-toast';
 
 const StockManagementPage: React.FC = () => {
     const [stocks, setStocks] = useState<StockInfo[]>([]);
@@ -40,10 +41,11 @@ const StockManagementPage: React.FC = () => {
         setIsLoading(true);
         try {
             const res = await stockApi.sync();
-            alert(`同步完成，新增 ${res.addedCount} 只股票`);
+            toast.success(`同步完成，新增 ${res.addedCount} 只股票`);
             loadStocks();
-        } catch (error) {
-            alert("同步失败");
+        } catch (error: any) {
+            const msg = error.response?.data?.message || error.response?.data?.detail || error.message || "同步失败";
+            toast.error(msg);
         } finally {
             setIsLoading(false);
         }
@@ -53,11 +55,13 @@ const StockManagementPage: React.FC = () => {
         setRefreshingStocks(prev => new Set(prev).add(code));
         try {
             await stockApi.refreshInfo(code);
+            toast.success('刷新成功');
             // 刷新成功后重新加载列表
             await loadStocks();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Refresh failed", error);
-            alert("刷新失败，请稍后重试");
+            const msg = error.response?.data?.message || error.response?.data?.detail || error.message || "刷新失败，请稍后重试";
+            toast.error(msg);
         } finally {
             setRefreshingStocks(prev => {
                 const next = new Set(prev);
@@ -83,14 +87,16 @@ const StockManagementPage: React.FC = () => {
                 tags: tags,
                 remark: newStockRemark
             });
+            toast.success('添加成功');
             setIsAddModalOpen(false);
             setNewStockCode('');
             setNewStockTags('');
             setNewStockRemark('');
             loadStocks();
         } catch (error: any) {
-            const msg = error.response?.data?.detail || error.message || "添加失败";
+            const msg = error.response?.data?.message || error.response?.data?.detail || error.message || "添加失败";
             setFormError(msg);
+            toast.error(msg);
         } finally {
             setIsSubmitting(false);
         }
@@ -100,18 +106,24 @@ const StockManagementPage: React.FC = () => {
         if (!window.confirm(`确定要删除 ${code} 吗？`)) return;
         try {
             await stockApi.delete(code);
+            toast.success('删除成功');
             loadStocks();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Delete failed", error);
+            const msg = error.response?.data?.message || error.response?.data?.detail || error.message || "删除失败";
+            toast.error(msg);
         }
     };
 
     const handleToggleActive = async (stock: StockInfo) => {
         try {
             await stockApi.update(stock.code, { isActive: !stock.isActive });
+            toast.success(stock.isActive ? '已停用' : '已启用');
             loadStocks();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Update failed", error);
+            const msg = error.response?.data?.message || error.response?.data?.detail || error.message || "操作失败";
+            toast.error(msg);
         }
     };
 

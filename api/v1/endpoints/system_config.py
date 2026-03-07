@@ -20,6 +20,8 @@ from api.v1.schemas.system_config import (
     ValidateSystemConfigResponse,
     FetchModelsRequest,
     FetchModelsResponse,
+    ModelsListResponse,
+    ModelInfo,
 )
 from src.services.system_config_service import ConfigConflictError, ConfigValidationError, SystemConfigService
 
@@ -202,5 +204,35 @@ def fetch_models(
             detail={
                 "error": "internal_error",
                 "message": "Failed to fetch models",
+            },
+        )
+
+
+@router.get(
+    "/config/models",
+    response_model=ModelsListResponse,
+    responses={
+        200: {"description": "Available models retrieved"},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
+    summary="Get available AI models",
+    description="Return list of available AI models for analysis based on current configuration.",
+)
+def get_available_models(
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> ModelsListResponse:
+    """Return available AI models for frontend selection."""
+    try:
+        models = service.get_available_models()
+        return ModelsListResponse(
+            models=[ModelInfo.model_validate(m) for m in models]
+        )
+    except Exception as exc:
+        logger.error("Failed to get available models: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": "Failed to retrieve available models",
             },
         )

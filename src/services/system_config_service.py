@@ -252,6 +252,58 @@ class SystemConfigService:
             f"Last error: {error_text}"
         )
 
+    def get_available_models(self) -> List[Dict[str, Any]]:
+        """Return list of available AI models for analysis.
+
+        Returns list of dicts with keys: name, display_name, provider, enabled
+        """
+        from src.config import config
+
+        models: List[Dict[str, Any]] = []
+
+        # Gemini models
+        if config.gemini.api_key:
+            models.append({
+                "name": config.gemini.model,
+                "display_name": "Gemini Flash 3.0",
+                "provider": "gemini",
+                "enabled": True,
+            })
+            if config.gemini.model_fallback:
+                models.append({
+                    "name": config.gemini.model_fallback,
+                    "display_name": "Gemini Flash 2.5 (备用)",
+                    "provider": "gemini",
+                    "enabled": True,
+                })
+
+        # OpenAI models
+        if config.openai.api_key:
+            models.append({
+                "name": config.openai.model,
+                "display_name": "OpenAI GPT-4o Mini",
+                "provider": "openai",
+                "enabled": True,
+            })
+
+        # Extra AI models from EXTRA_AI_MODELS config
+        if config.openai.extra_ai_models:
+            try:
+                extra_models = json.loads(config.openai.extra_ai_models)
+                if isinstance(extra_models, list):
+                    for m in extra_models:
+                        if isinstance(m, dict) and m.get("name"):
+                            models.append({
+                                "name": m["name"],
+                                "display_name": m.get("display_name") or m["name"],
+                                "provider": m.get("provider", "custom"),
+                                "enabled": m.get("enabled", True),
+                            })
+            except json.JSONDecodeError:
+                logger.warning("Failed to parse EXTRA_AI_MODELS as JSON")
+
+        return models
+
     def _collect_issues(self, items: Sequence[Dict[str, str]], mask_token: str) -> List[Dict[str, Any]]:
         """Collect field-level and cross-field validation issues."""
         current_map = self._backend.read_config_map()
