@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { stockApi } from '../api/stocks';
 import type { StockInfo } from '../api/stocks';
 import toast from 'react-hot-toast';
-import { Button } from '../components/common';
+import { Button, Card } from '../components/common';
 
 const StockManagementPage: React.FC = () => {
     const [stocks, setStocks] = useState<StockInfo[]>([]);
@@ -156,20 +156,22 @@ const StockManagementPage: React.FC = () => {
             </header>
 
             {/* Filters */}
-            <div className="flex items-center gap-4 bg-[#1e293b]/50 p-4 rounded-lg border border-white/5">
-                <label className="flex items-center gap-2 cursor-pointer text-gray-300 select-none">
-                    <input
-                        type="checkbox"
-                        checked={filterActive}
-                        onChange={(e) => setFilterActive(e.target.checked)}
-                        className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
-                    />
-                    仅显示启用
-                </label>
-                <div className="text-sm text-gray-500 ml-auto">
-                    共 {stocks.length} 只股票
+            <Card padding="md" className="bg-[#1e293b]/50 border-white/5">
+                <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-gray-300 select-none">
+                        <input
+                            type="checkbox"
+                            checked={filterActive}
+                            onChange={(e) => setFilterActive(e.target.checked)}
+                            className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+                        />
+                        仅显示启用
+                    </label>
+                    <div className="text-sm text-gray-500 ml-auto">
+                        共 {stocks.length} 只股票
+                    </div>
                 </div>
-            </div>
+            </Card>
 
             {/* Table */}
             <div className="overflow-x-auto rounded-lg border border-white/10 bg-[#1e293b]">

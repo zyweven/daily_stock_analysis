@@ -5,7 +5,7 @@ import { stockApi } from '../api/stocks';
 import type { PositionWithProfit, PortfolioSummary, CreatePositionRequest } from '../api/portfolio';
 import type { StockInfo } from '../api/stocks';
 import toast from 'react-hot-toast';
-import { Button } from '../components/common';
+import { Button, Card } from '../components/common';
 
 const PortfolioPage: React.FC = () => {
     const [positions, setPositions] = useState<PositionWithProfit[]>([]);
@@ -268,29 +268,29 @@ const PortfolioPage: React.FC = () => {
             {/* 汇总卡片 */}
             {summary && (
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="bg-[#1e293b] rounded-lg p-4 border border-white/10">
+                    <Card padding="md" className="bg-[#1e293b] border-white/10">
                         <div className="text-gray-400 text-sm">持仓数量</div>
                         <div className="text-2xl font-bold text-white mt-1">{summary.totalPositions}</div>
-                    </div>
-                    <div className="bg-[#1e293b] rounded-lg p-4 border border-white/10">
+                    </Card>
+                    <Card padding="md" className="bg-[#1e293b] border-white/10">
                         <div className="text-gray-400 text-sm">总本金</div>
                         <div className="text-2xl font-bold text-white mt-1">
                             {totalPrincipal ? formatMoney(totalPrincipal) : (
                                 <span className="text-gray-500 text-base">未设置</span>
                             )}
                         </div>
-                    </div>
-                    <div className="bg-[#1e293b] rounded-lg p-4 border border-white/10">
+                    </Card>
+                    <Card padding="md" className="bg-[#1e293b] border-white/10">
                         <div className="text-gray-400 text-sm">总投入</div>
                         <div className="text-2xl font-bold text-white mt-1">{formatMoney(totalCostValue)}</div>
-                    </div>
-                    <div className="bg-[#1e293b] rounded-lg p-4 border border-white/10">
+                    </Card>
+                    <Card padding="md" className="bg-[#1e293b] border-white/10">
                         <div className="text-gray-400 text-sm">总市值</div>
                         <div className="text-2xl font-bold text-white mt-1">
                             {totalMarketValue > 0 ? formatMoney(totalMarketValue) : '加载中...'}
                         </div>
-                    </div>
-                    <div className="bg-[#1e293b] rounded-lg p-4 border border-white/10">
+                    </Card>
+                    <Card padding="md" className="bg-[#1e293b] border-white/10">
                         <div className="text-gray-400 text-sm">总盈亏</div>
                         <div className={`text-2xl font-bold mt-1 ${totalProfitLoss >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             {totalMarketValue > 0 ? (
@@ -300,7 +300,7 @@ const PortfolioPage: React.FC = () => {
                                 </>
                             ) : '--'}
                         </div>
-                    </div>
+                    </Card>
                 </div>
             )}
 
@@ -328,24 +328,26 @@ const PortfolioPage: React.FC = () => {
             )}
 
             {/* 筛选 */}
-            <div className="flex items-center gap-4 bg-[#1e293b]/50 p-4 rounded-lg border border-white/5">
-                <label className="flex items-center gap-2 cursor-pointer text-gray-300 select-none">
-                    <span className="text-sm">分组：</span>
-                    <select
-                        value={selectedGroup}
-                        onChange={(e) => setSelectedGroup(e.target.value)}
-                        className="bg-black/20 border border-white/10 rounded px-3 py-1.5 text-white focus:border-blue-500 focus:outline-none"
-                    >
-                        <option value="">全部分组</option>
-                        {groups.map(group => (
-                            <option key={group} value={group}>{group}</option>
-                        ))}
-                    </select>
-                </label>
-                <div className="text-sm text-gray-500 ml-auto">
-                    共 {positions.length} 条持仓
+            <Card padding="md" className="bg-[#1e293b]/50 border-white/5">
+                <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer text-gray-300 select-none">
+                        <span className="text-sm">分组：</span>
+                        <select
+                            value={selectedGroup}
+                            onChange={(e) => setSelectedGroup(e.target.value)}
+                            className="bg-black/20 border border-white/10 rounded px-3 py-1.5 text-white focus:border-blue-500 focus:outline-none"
+                        >
+                            <option value="">全部分组</option>
+                            {groups.map(group => (
+                                <option key={group} value={group}>{group}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <div className="text-sm text-gray-500 ml-auto">
+                        共 {positions.length} 条持仓
+                    </div>
                 </div>
-            </div>
+            </Card>
 
             {/* 持仓表格 */}
             <div className="overflow-x-auto rounded-lg border border-white/10 bg-[#1e293b]">

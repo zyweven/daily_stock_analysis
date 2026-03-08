@@ -59,10 +59,10 @@
 - [x] 审计所有页面的样式类名使用情况 ✅
   - **发现**：`SettingsPage` 的 `sp-*` 样式系统是专门为设置页面设计的完整体系（600+行CSS），与 `SettingsField` 组件深度集成
   - **建议**：保留 `SettingsPage` 样式系统，专注于统一其他页面
-- [ ] 创建样式迁移指南文档
+- [x] 创建样式迁移指南文档 ✅（创建 `ui-migration-guide.md`）
 - [x] 统一按钮样式为 `Button` 组件（主要操作按钮已完成替换，约30个）✅
-- [ ] 统一卡片样式为 `Card` 组件
-- [ ] 确保其他页面不使用 `sp-*` 类名
+- [x] 统一卡片样式为 `Card` 组件 ✅（已替换 PortfolioPage 和 StockManagementPage 的主要卡片）
+- [x] 确保其他页面不使用 `sp-*` 类名 ✅（仅 SettingsPage 使用，符合预期）
 
 **涉及文件**：
 - `apps/dsa-web/src/pages/SettingsPage.tsx`
@@ -82,6 +82,22 @@
 - [ ] 创建可复用的表单 hook
 - [ ] 更新一个页面作为示例（推荐 AgentSettingsPage）
 - [ ] 编写表单开发指南
+
+### 可选优化项评估
+
+从优秀项目的长远角度评估，以下优化建议纳入计划：
+
+| 优化项 | 优先级 | 评估结论 | 理由 |
+|--------|--------|----------|------|
+| **IconButton 组件** | Medium | ✅ 建议实施 | Modal X 关闭按钮等图标按钮场景多，统一组件可确保一致的悬停/点击效果 |
+| **Switch/Toggle 组件** | Medium | ✅ 建议实施 | 当前强制重跑、状态筛选等使用自定义样式，统一组件可提高可维护性 |
+| **ChatPage 快捷按钮** | Low | ⏸️ 暂缓 | 样式特殊，作为列表项的一部分，如需统一需重新设计交互，ROI 较低 |
+| **SettingsPage 样式系统** | Low | ⏸️ 保持现状 | 600+行CSS的完整体系，迁移成本高，收益有限 |
+| **ExpertPanelPage 样式系统** | Low | ⏸️ 保持现状 | 独立的专家会诊设计风格，与整体UI有区分度是设计意图 |
+
+**建议新增计划**：
+- PLAN-001-OPT-1: 创建 IconButton 组件
+- PLAN-001-OPT-2: 创建 Switch/Toggle 组件
 
 ## 技术方案
 
@@ -155,7 +171,9 @@
 
 - [Button组件](../apps/dsa-web/src/components/common/Button.tsx)
 - [Select组件](../apps/dsa-web/src/components/common/Select.tsx)
+- [Card组件](../apps/dsa-web/src/components/common/Card.tsx)
 - [SettingsField组件](../apps/dsa-web/src/components/settings/SettingsField.tsx)
+- [UI样式迁移指南](./ui-migration-guide.md) - 详细的组件替换对照表
 
 ## 进度记录
 
@@ -168,6 +186,7 @@
 | 2026-03-07 | 替换按钮进行中：已替换AgentSettingsPage(2个)和SkillLibraryPage(2个)的主要按钮 | Claude |
 | 2026-03-07 | 继续替换按钮：完成HomePage(1)、PortfolioPage(6)、StockManagementPage(4)、BacktestPage(2)、NotFoundPage(1)的主要按钮替换 | Claude |
 | 2026-03-08 | 继续替换表格内小型按钮：PortfolioPage(2)、StockManagementPage(2)、BacktestPage(1)；类型检查通过 | Claude |
+| 2026-03-08 | 完成任务2剩余部分：统一 Card 组件使用、创建样式迁移指南、检查 sp-* 类名使用；评估可选优化项 | Claude |
 
 ### 已替换按钮统计
 
