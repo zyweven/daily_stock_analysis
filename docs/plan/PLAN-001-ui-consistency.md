@@ -96,8 +96,8 @@
 | **ExpertPanelPage 样式系统** | Low | ⏸️ 保持现状 | 独立的专家会诊设计风格，与整体UI有区分度是设计意图 |
 
 **建议新增计划**：
-- PLAN-001-OPT-1: 创建 IconButton 组件
-- PLAN-001-OPT-2: 创建 Switch/Toggle 组件
+- PLAN-001-OPT-1: 创建 IconButton 组件 ✅ 已完成
+- PLAN-001-OPT-2: 创建 Switch/Toggle 组件 ✅ 已完成
 
 ## 技术方案
 
@@ -187,6 +187,7 @@
 | 2026-03-07 | 继续替换按钮：完成HomePage(1)、PortfolioPage(6)、StockManagementPage(4)、BacktestPage(2)、NotFoundPage(1)的主要按钮替换 | Claude |
 | 2026-03-08 | 继续替换表格内小型按钮：PortfolioPage(2)、StockManagementPage(2)、BacktestPage(1)；类型检查通过 | Claude |
 | 2026-03-08 | 完成任务2剩余部分：统一 Card 组件使用、创建样式迁移指南、检查 sp-* 类名使用；评估可选优化项 | Claude |
+| 2026-03-08 | 完成可选优化：创建 IconButton 和 Switch 组件，应用至各页面弹窗 | Claude |
 
 ### 已替换按钮统计
 

@@ -5,7 +5,7 @@ import { stockApi } from '../api/stocks';
 import type { PositionWithProfit, PortfolioSummary, CreatePositionRequest } from '../api/portfolio';
 import type { StockInfo } from '../api/stocks';
 import toast from 'react-hot-toast';
-import { Button, Card } from '../components/common';
+import { Button, Card, IconButton } from '../components/common';
 
 const PortfolioPage: React.FC = () => {
     const [positions, setPositions] = useState<PositionWithProfit[]>([]);
@@ -460,12 +460,15 @@ const PortfolioPage: React.FC = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                     <div className="bg-[#1e293b] rounded-lg border border-white/10 shadow-xl w-full max-w-md p-6 animate-fade-in relative">
                         <h2 className="text-xl font-bold text-white mb-4">添加持仓</h2>
-                        <button
+                        <IconButton
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setIsAddModalOpen(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-white"
+                            className="absolute top-4 right-4"
+                            title="关闭"
                         >
                             ✕
-                        </button>
+                        </IconButton>
 
                         <form onSubmit={handleAddPosition} className="space-y-4">
                             <div>
@@ -619,12 +622,15 @@ const PortfolioPage: React.FC = () => {
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
                     <div className="bg-[#1e293b] rounded-lg border border-white/10 shadow-xl w-full max-w-md p-6 animate-fade-in relative">
                         <h2 className="text-xl font-bold text-white mb-4">设置总本金</h2>
-                        <button
+                        <IconButton
+                            variant="ghost"
+                            size="sm"
                             onClick={() => setIsSettingModalOpen(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-white"
+                            className="absolute top-4 right-4"
+                            title="关闭"
                         >
                             ✕
-                        </button>
+                        </IconButton>
 
                         <div className="space-y-4">
                             <div>

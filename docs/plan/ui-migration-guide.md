@@ -137,6 +137,87 @@
 
 ---
 
+### 图标按钮 (IconButton)
+
+| 旧写法 | 新写法 |
+|--------|--------|
+| `<button className="p-2 text-gray-400 hover:text-white...">✕</button>` | `<IconButton variant="ghost" size="sm">✕</IconButton>` |
+
+**支持的 variant**: `default` | `ghost` | `danger`
+
+**支持的 size**: `sm` | `md` | `lg`
+
+**示例**:
+```tsx
+// Modal 关闭按钮
+<IconButton
+  variant="ghost"
+  size="sm"
+  onClick={() => setIsOpen(false)}
+  title="关闭"
+>
+  ✕
+</IconButton>
+
+// 工具栏图标按钮
+<IconButton variant="default" size="md" onClick={handleRefresh} title="刷新">
+  <RefreshIcon className="w-4 h-4" />
+</IconButton>
+
+// 危险操作图标按钮
+<IconButton variant="danger" size="sm" onClick={handleDelete} title="删除">
+  <TrashIcon className="w-4 h-4" />
+</IconButton>
+```
+
+---
+
+### 开关 (Switch)
+
+| 旧写法 | 新写法 |
+|--------|--------|
+| `<button onClick={() => setChecked(!checked)}>...</button>` | `<Switch checked={checked} onChange={setChecked} />` |
+
+**支持的 size**: `sm` | `md`
+
+**示例**:
+```tsx
+// 基础用法
+<Switch
+  checked={forceRerun}
+  onChange={setForceRerun}
+  label="强制重跑"
+/>
+
+// 小型开关
+<Switch
+  checked={enabled}
+  onChange={setEnabled}
+  size="sm"
+  label="启用"
+/>
+
+// 禁用状态
+<Switch
+  checked={checked}
+  onChange={handleChange}
+  disabled={isLoading}
+  label="处理中..."
+/>
+```
+
+**何时使用 Switch**:
+- 二元状态切换（开/关）
+- 立即生效的设置项
+- 需要视觉反馈的布尔选项
+
+**何时不使用 Switch**:
+- 需要确认的操作（使用 Checkbox）
+- 多选一的场景（使用 Radio 或 Select）
+- 执行动作的按钮（使用 Button）
+
+---
+
 ### 状态标签 (Badge)
 
 | 旧写法 | 新写法 |

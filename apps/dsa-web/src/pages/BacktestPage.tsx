@@ -2,7 +2,7 @@ import type React from 'react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { backtestApi } from '../api/backtest';
 import { stockApi } from '../api/stocks';
-import { Card, Badge, Pagination, Button } from '../components/common';
+import { Card, Badge, Pagination, Button, Switch } from '../components/common';
 import { StockPriceChart, StockChartModal } from '../components/backtest';
 import type {
   BacktestResultItem,
@@ -398,26 +398,13 @@ const BacktestPage: React.FC = () => {
             />
             <span className="text-[10px] text-slate-500">天</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setForceRerun(!forceRerun)}
+          <Switch
+            checked={forceRerun}
+            onChange={setForceRerun}
             disabled={isRunning}
-            className={`
-              flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium
-              transition-all duration-200 whitespace-nowrap border cursor-pointer
-              ${forceRerun
-                ? 'border-cyan/40 bg-cyan/10 text-cyan shadow-[0_0_8px_rgba(0,212,255,0.15)]'
-                : 'border-white/10 bg-transparent text-muted hover:border-white/20 hover:text-secondary'
-              }
-              disabled:opacity-50 disabled:cursor-not-allowed
-            `}
-          >
-            <span className={`
-              inline-block w-1.5 h-1.5 rounded-full transition-colors duration-200
-              ${forceRerun ? 'bg-cyan shadow-[0_0_4px_rgba(0,212,255,0.6)]' : 'bg-white/20'}
-            `} />
-            强制重跑
-          </button>
+            size="sm"
+            label="强制重跑"
+          />
           <Button
             variant="primary"
             onClick={handleRun}
