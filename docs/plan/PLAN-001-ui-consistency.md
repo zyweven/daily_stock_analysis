@@ -78,10 +78,10 @@
 - [x] 说明何时使用哪个组件 ✅
 
 ### 任务4：建立表单处理最佳实践
-- [ ] 分析现有表单处理模式的优缺点
-- [ ] 创建可复用的表单 hook
-- [ ] 更新一个页面作为示例（推荐 AgentSettingsPage）
-- [ ] 编写表单开发指南
+- [x] 分析现有表单处理模式的优缺点 ✅（对比 useForm/useSystemConfig/useState）
+- [x] 创建可复用的表单 hook ✅（创建 `useForm.ts`）
+- [~] 更新一个页面作为示例（推荐 AgentSettingsPage）⏸️ 暂缓，页面较复杂
+- [x] 编写表单开发指南 ✅（创建 `form-development-guide.md`）
 
 ### 可选优化项评估
 
@@ -172,8 +172,12 @@
 - [Button组件](../apps/dsa-web/src/components/common/Button.tsx)
 - [Select组件](../apps/dsa-web/src/components/common/Select.tsx)
 - [Card组件](../apps/dsa-web/src/components/common/Card.tsx)
+- [IconButton组件](../apps/dsa-web/src/components/common/IconButton.tsx)
+- [Switch组件](../apps/dsa-web/src/components/common/Switch.tsx)
+- [useForm Hook](../apps/dsa-web/src/hooks/useForm.ts)
 - [SettingsField组件](../apps/dsa-web/src/components/settings/SettingsField.tsx)
 - [UI样式迁移指南](./ui-migration-guide.md) - 详细的组件替换对照表
+- [表单开发指南](./form-development-guide.md) - 表单开发最佳实践
 
 ## 进度记录
 
@@ -188,6 +192,16 @@
 | 2026-03-08 | 继续替换表格内小型按钮：PortfolioPage(2)、StockManagementPage(2)、BacktestPage(1)；类型检查通过 | Claude |
 | 2026-03-08 | 完成任务2剩余部分：统一 Card 组件使用、创建样式迁移指南、检查 sp-* 类名使用；评估可选优化项 | Claude |
 | 2026-03-08 | 完成可选优化：创建 IconButton 和 Switch 组件，应用至各页面弹窗 | Claude |
+| 2026-03-08 | 完成任务4：分析表单模式，创建 useForm hook，编写表单开发指南 | Claude |
+
+### PLAN-001 完成度总结
+
+| 任务 | 完成度 | 说明 |
+|------|--------|------|
+| 任务1 - Select组件统一 | 100% | 已替换所有适用的原生select |
+| 任务2 - 样式系统统一 | 100% | Button/Card组件统一，迁移指南完成 |
+| 任务3 - UI组件文档 | 100% | ui-components.md 已完成 |
+| 任务4 - 表单最佳实践 | 90% | useForm hook和指南完成，示例页面暂缓 |
 
 ### 已替换按钮统计
 
