@@ -16,19 +16,74 @@
 
 ## 计划列表
 
+### 前端改进计划
+
 | 计划ID | 计划名称 | 优先级 | 状态 | 进度 | 负责人 |
 |--------|----------|--------|------|------|--------|
-| [PLAN-001](./PLAN-001-ui-consistency.md) | UI一致性改进 | High | In Progress | 0% | - |
-| [PLAN-002](./PLAN-002-portfolio-multi-user.md) | 投资组合多用户支持 | High | Planning | 0% | - |
-| [PLAN-003](./PLAN-003-chat-history.md) | 聊天历史持久化 | Medium | Planning | 0% | - |
+| [PLAN-001](./PLAN-001-ui-consistency.md) | UI一致性改进 | 🔴 High | ✅ Completed | 95% | - |
 
-## 计划状态说明
+### 后端改进计划
 
-- **Planning**: 计划中，尚未开始
-- **In Progress**: 进行中
-- **Review**: 待审核
-- **Completed**: 已完成
-- **Paused**: 暂停
+| 计划ID | 计划名称 | 优先级 | 状态 | 依赖 | 负责人 |
+|--------|----------|--------|------|------|--------|
+| [PLAN-BE-001](./PLAN-BE-001-refactor-large-files.md) | 大文件拆分 | 🔴 High | ✅ Completed | - | - |
+| [PLAN-BE-002](./PLAN-BE-002-api-authentication.md) | API认证与授权 | 🔴 High | ⏸️ Pending | BE-001 | - |
+| [PLAN-BE-003](./PLAN-BE-003-improve-test-coverage.md) | 提升测试覆盖率 | 🟡 Medium | ⏸️ Pending | BE-001, BE-002 | - |
+| [PLAN-BE-004](./PLAN-BE-004-optimize-configuration.md) | 配置管理优化 | 🟢 Low | ⏸️ Pending | BE-001 | - |
+
+### 业务功能计划
+
+| 计划ID | 计划名称 | 优先级 | 状态 | 进度 | 负责人 |
+|--------|----------|--------|------|------|--------|
+| [PLAN-002](./PLAN-002-portfolio-multi-user.md) | 投资组合多用户支持 | 🔴 High | ⏸️ Planning | 0% | - |
+| [PLAN-003](./PLAN-003-chat-history.md) | 聊天历史持久化 | 🟡 Medium | ⏸️ Planning | 0% | - |
+
+## 状态说明
+
+| 图标 | 状态 | 含义 |
+|------|------|------|
+| ⏸️ | Pending | 等待开始，可能依赖其他计划 |
+| 🟡 | In Progress | 正在进行中 |
+| 🔄 | Review | 等待审核 |
+| ✅ | Completed | 已完成 |
+| ❌ | Cancelled | 已取消 |
+
+## 优先级说明
+
+| 优先级 | 含义 | 响应时间 |
+|--------|------|----------|
+| 🔴 High | 关键问题，影响系统稳定性和安全性 | 立即处理 |
+| 🟡 Medium | 重要改进，提升开发效率和代码质量 | 1-2周内 |
+| 🟢 Low | 优化项，长期技术债务清理 | 按需安排 |
+
+## 实施路线图
+
+```
+时间线
+─────────────────────────────────────────────────────────────
+
+Week 1-2:  PLAN-BE-001 大文件拆分
+           ├── 创建 notification/ 包
+           ├── 创建 storage/ 包
+           └── 验证和向后兼容
+
+Week 3-4:  PLAN-BE-002 API认证与授权
+           ├── 依赖 PLAN-BE-001 完成
+           ├── 实现 JWT 认证
+           ├── 添加权限控制
+           └── 前端登录集成
+
+Week 5-6:  PLAN-BE-003 提升测试覆盖率
+           ├── 依赖 PLAN-BE-001, BE-002
+           ├── 测试基础设施
+           ├── 核心模块测试
+           └── API 集成测试
+
+Week 7+:   PLAN-BE-004 配置管理优化
+           ├── 依赖 PLAN-BE-001
+           ├── Pydantic 配置模型
+           └── 文档更新
+```
 
 ## 快速创建新计划
 
