@@ -1,12 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-A股自选股智能分析系统 - 存储层
+存储模块
 ===================================
-
-.. deprecated::
-    此模块已拆分为 src.storage 包，请直接使用：
-        from src.storage import Base, DatabaseManager, SystemConfig, ...
 
 职责：
 1. 管理 SQLite 数据库连接（单例模式）
@@ -15,20 +11,10 @@ A股自选股智能分析系统 - 存储层
 4. 实现智能更新逻辑（断点续传）
 """
 
-import warnings
-
-# 发出弃用警告
-warnings.warn(
-    "src.storage 模块已重构为包结构，请使用新的导入方式：\n"
-    "  from src.storage import Base, DatabaseManager, SystemConfig, ...\n"
-    "此兼容层将在未来版本中移除。",
-    DeprecationWarning,
-    stacklevel=2
-)
-
-# 从新的包结构重新导出
 from src.storage.base import Base
 from src.storage.manager import DatabaseManager, get_db
+
+# 导出所有模型
 from src.storage.models import (
     SystemConfig,
     AgentProfile,
@@ -46,9 +32,11 @@ from src.storage.models import (
 )
 
 __all__ = [
+    # 基础
     'Base',
     'DatabaseManager',
     'get_db',
+    # 模型
     'SystemConfig',
     'AgentProfile',
     'StockDaily',
