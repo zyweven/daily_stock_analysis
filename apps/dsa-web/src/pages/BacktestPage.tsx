@@ -2,7 +2,7 @@ import type React from 'react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { backtestApi } from '../api/backtest';
 import { stockApi } from '../api/stocks';
-import { Card, Badge, Pagination } from '../components/common';
+import { Card, Badge, Pagination, Button } from '../components/common';
 import { StockPriceChart, StockChartModal } from '../components/backtest';
 import type {
   BacktestResultItem,
@@ -375,14 +375,14 @@ const BacktestPage: React.FC = () => {
               onKeyDown={handleKeyDown}
             />
           </div>
-          <button
-            type="button"
+          <Button
+            variant="secondary"
             onClick={handleFilter}
             disabled={isLoadingResults}
-            className="btn-secondary flex items-center gap-1.5 whitespace-nowrap"
+            className="whitespace-nowrap"
           >
             筛选
-          </button>
+          </Button>
           <div className="flex items-center gap-1 whitespace-nowrap">
             <span className="text-xs text-muted">窗口</span>
             <input
@@ -418,24 +418,15 @@ const BacktestPage: React.FC = () => {
             `} />
             强制重跑
           </button>
-          <button
-            type="button"
+          <Button
+            variant="primary"
             onClick={handleRun}
             disabled={isRunning}
-            className="btn-primary flex items-center gap-1.5 whitespace-nowrap"
+            isLoading={isRunning}
+            className="whitespace-nowrap"
           >
-            {isRunning ? (
-              <>
-                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                运行中...
-              </>
-            ) : (
-              '开始回测'
-            )}
-          </button>
+            {isRunning ? '运行中...' : '开始回测'}
+          </Button>
         </div>
 
         {/* Run Result & Tips */}
@@ -677,13 +668,15 @@ const BacktestPage: React.FC = () => {
                             </td>
                             <td className="px-3 py-2">
                               {row.evalStatus === 'insufficient_data' && (
-                                <button
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => handleRefreshData(row.code)}
                                   disabled={refreshingCode === row.code}
-                                  className="text-[10px] px-2 py-1 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors disabled:opacity-50"
+                                  className="text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
                                 >
                                   {refreshingCode === row.code ? '补全中...' : '补全数据'}
-                                </button>
+                                </Button>
                               )}
                             </td>
                           </tr>

@@ -5,6 +5,7 @@ import { stockApi } from '../api/stocks';
 import type { PositionWithProfit, PortfolioSummary, CreatePositionRequest } from '../api/portfolio';
 import type { StockInfo } from '../api/stocks';
 import toast from 'react-hot-toast';
+import { Button } from '../components/common';
 
 const PortfolioPage: React.FC = () => {
     const [positions, setPositions] = useState<PositionWithProfit[]>([]);
@@ -242,25 +243,25 @@ const PortfolioPage: React.FC = () => {
                     <p className="text-gray-400 text-sm mt-1">管理您的股票持仓和成本</p>
                 </div>
                 <div className="flex gap-3">
-                    <button
+                    <Button
+                        variant="secondary"
                         onClick={refreshQuotes}
                         disabled={isRefreshingQuotes}
-                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors text-white disabled:opacity-50"
                     >
                         {isRefreshingQuotes ? '刷新中...' : '🔄 刷新行情'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="secondary"
                         onClick={() => setIsSettingModalOpen(true)}
-                        className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm transition-colors text-white"
                     >
                         ⚙️ 设置本金
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                        variant="primary"
                         onClick={() => setIsAddModalOpen(true)}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm transition-colors text-white font-medium"
                     >
                         + 添加持仓
-                    </button>
+                    </Button>
                 </div>
             </header>
 
@@ -425,19 +426,23 @@ const PortfolioPage: React.FC = () => {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     onClick={() => handleClose(position.code, position.groupName)}
-                                                    className="text-yellow-400 hover:text-yellow-300 text-xs"
                                                     title="标记为已卖出"
+                                                    className="text-yellow-400 hover:text-yellow-300"
                                                 >
                                                     平仓
-                                                </button>
-                                                <button
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
                                                     onClick={() => handleDelete(position.code, position.groupName)}
-                                                    className="text-red-400 hover:text-red-300 text-xs"
+                                                    className="text-red-400 hover:text-red-300"
                                                 >
                                                     删除
-                                                </button>
+                                                </Button>
                                             </div>
                                         </td>
                                     </tr>
@@ -587,28 +592,20 @@ const PortfolioPage: React.FC = () => {
                             )}
 
                             <div className="flex justify-end gap-3 mt-6">
-                                <button
-                                    type="button"
+                                <Button
+                                    variant="secondary"
                                     onClick={() => setIsAddModalOpen(false)}
-                                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white disabled:opacity-50"
                                     disabled={isSubmitting}
                                 >
                                     取消
-                                </button>
-                                <button
+                                </Button>
+                                <Button
                                     type="submit"
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white font-medium disabled:opacity-50 flex items-center gap-2"
-                                    disabled={isSubmitting}
+                                    variant="primary"
+                                    isLoading={isSubmitting}
                                 >
-                                    {isSubmitting ? (
-                                        <>
-                                            <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                            处理中...
-                                        </>
-                                    ) : (
-                                        '确认添加'
-                                    )}
-                                </button>
+                                    {isSubmitting ? '处理中...' : '确认添加'}
+                                </Button>
                             </div>
                         </form>
                     </div>
@@ -656,18 +653,18 @@ const PortfolioPage: React.FC = () => {
                             )}
 
                             <div className="flex justify-end gap-3 mt-6">
-                                <button
+                                <Button
+                                    variant="secondary"
                                     onClick={() => setIsSettingModalOpen(false)}
-                                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
                                 >
                                     取消
-                                </button>
-                                <button
+                                </Button>
+                                <Button
+                                    variant="primary"
                                     onClick={handleSetPrincipal}
-                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm text-white font-medium"
                                 >
                                     确认设置
-                                </button>
+                                </Button>
                             </div>
                         </div>
                     </div>

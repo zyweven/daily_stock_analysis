@@ -3,8 +3,7 @@ import { SkillApi, AgentApi } from '../api';
 import type { Skill, SkillCategory, SkillPreviewResult } from '../api/skills';
 import type { AgentProfile } from '../api/agents';
 import { toast } from 'react-hot-toast';
-import { Drawer } from '../components/common/Drawer';
-import { Badge } from '../components/common/Badge';
+import { Drawer, Badge, Select, Button } from '../components/common';
 
 type SkillFormData = {
     name: string;
@@ -287,22 +286,20 @@ const SkillLibraryPage: React.FC = () => {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        <button
-                            type="button"
-                            className="btn-secondary"
+                        <Button
+                            variant="secondary"
                             onClick={handleOpenTemplateModal}
                             disabled={isLoading || agents.length === 0}
                         >
                             🚀 应用模板
-                        </button>
-                        <button
-                            type="button"
-                            className="btn-primary"
+                        </Button>
+                        <Button
+                            variant="primary"
                             onClick={handleCreateNew}
                             disabled={isLoading}
                         >
                             + 新建技能
-                        </button>
+                        </Button>
                     </div>
                 </div>
             </header>
@@ -401,20 +398,20 @@ const SkillLibraryPage: React.FC = () => {
                                         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                             {!skill.is_builtin && (
                                                 <>
-                                                    <button
-                                                        type="button"
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
                                                         onClick={(e) => handleEdit(skill, e)}
-                                                        className="text-xs px-2 py-1 rounded bg-blue-600/20 text-blue-400 hover:bg-blue-600/30"
                                                     >
                                                         编辑
-                                                    </button>
-                                                    <button
-                                                        type="button"
+                                                    </Button>
+                                                    <Button
+                                                        variant="danger"
+                                                        size="sm"
                                                         onClick={(e) => handleDelete(skill, e)}
-                                                        className="text-xs px-2 py-1 rounded bg-red-600/20 text-red-400 hover:bg-red-600/30"
                                                     >
                                                         删除
-                                                    </button>
+                                                    </Button>
                                                 </>
                                             )}
                                         </div>
@@ -457,14 +454,14 @@ const SkillLibraryPage: React.FC = () => {
                                 />
                             </div>
 
-                            <button
-                                type="button"
+                            <Button
+                                variant="primary"
                                 onClick={handleRunPreview}
                                 disabled={isPreviewLoading || previewSkillIds.length === 0}
-                                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
+                                isLoading={isPreviewLoading}
                             >
                                 {isPreviewLoading ? '计算中...' : '生成预览'}
-                            </button>
+                            </Button>
 
                             {previewResult && (
                                 <div className="mt-4 space-y-3 rounded-xl border border-gray-700/50 bg-gray-900/40 p-4">
@@ -567,23 +564,21 @@ const SkillLibraryPage: React.FC = () => {
 
                         {!selectedSkill.is_builtin && (
                             <div className="flex gap-3 pt-4 border-t border-white/5">
-                                <button
-                                    type="button"
+                                <Button
+                                    variant="ghost"
                                     onClick={() => {
                                         handleCloseDetail();
                                         setTimeout(() => handleEdit(selectedSkill, { stopPropagation: () => {} } as any), 100);
                                     }}
-                                    className="px-4 py-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600/30"
                                 >
                                     编辑
-                                </button>
-                                <button
-                                    type="button"
+                                </Button>
+                                <Button
+                                    variant="danger"
                                     onClick={(e) => handleDelete(selectedSkill, e)}
-                                    className="px-4 py-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600/30"
                                 >
                                     删除
-                                </button>
+                                </Button>
                             </div>
                         )}
                     </div>
@@ -597,13 +592,12 @@ const SkillLibraryPage: React.FC = () => {
                             <h2 className="text-lg font-semibold text-white">
                                 {editingSkill ? '编辑技能' : '新建技能'}
                             </h2>
-                            <button
-                                type="button"
+                            <Button
+                                variant="ghost"
                                 onClick={() => setIsFormOpen(false)}
-                                className="text-gray-400 hover:text-white"
                             >
                                 ✕
-                            </button>
+                            </Button>
                         </div>
 
                         <div className="p-6 space-y-4">
@@ -632,18 +626,15 @@ const SkillLibraryPage: React.FC = () => {
 
                             <div>
                                 <label className="block text-xs text-muted mb-1">分类</label>
-                                <select
+                                <Select
                                     value={formData.category}
-                                    onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                                    className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-3 py-2 text-white"
-                                >
-                                    {categories.map((cat) => (
-                                        <option key={cat.id} value={cat.id}>
-                                            {cat.icon} {cat.name}
-                                        </option>
-                                    ))}
-                                    <option value="general">🔧 通用能力</option>
-                                </select>
+                                    onChange={(val) => setFormData({ ...formData, category: val })}
+                                    options={[
+                                        ...categories.map((cat) => ({ value: cat.id, label: `${cat.icon} ${cat.name}` })),
+                                        { value: 'general', label: '🔧 通用能力' }
+                                    ]}
+                                    placeholder="请选择分类"
+                                />
                             </div>
 
                             <div>
@@ -686,21 +677,20 @@ const SkillLibraryPage: React.FC = () => {
                         </div>
 
                         <div className="flex justify-end gap-3 px-6 py-4 border-t border-white/5">
-                            <button
-                                type="button"
+                            <Button
+                                variant="ghost"
                                 onClick={() => setIsFormOpen(false)}
-                                className="px-4 py-2 text-gray-400 hover:text-white"
                             >
                                 取消
-                            </button>
-                            <button
-                                type="button"
+                            </Button>
+                            <Button
+                                variant="primary"
                                 onClick={() => void handleSaveForm()}
                                 disabled={isSaving}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                                isLoading={isSaving}
                             >
-                                {isSaving ? '保存中...' : '保存'}
-                            </button>
+                                保存
+                            </Button>
                         </div>
                     </div>
                 </div>
@@ -711,13 +701,12 @@ const SkillLibraryPage: React.FC = () => {
                     <div className="w-full max-w-lg rounded-2xl border border-white/10 bg-card shadow-2xl">
                         <div className="flex items-center justify-between px-6 py-4 border-b border-white/5">
                             <h2 className="text-lg font-semibold text-white">应用技能模板</h2>
-                            <button
-                                type="button"
+                            <Button
+                                variant="ghost"
                                 onClick={() => setIsTemplateModalOpen(false)}
-                                className="text-gray-400 hover:text-white"
                             >
                                 ✕
-                            </button>
+                            </Button>
                         </div>
 
                         <div className="p-6 space-y-4">
@@ -759,36 +748,33 @@ const SkillLibraryPage: React.FC = () => {
 
                             <div>
                                 <label className="block text-xs text-muted mb-1">目标 Agent</label>
-                                <select
+                                <Select
                                     value={targetAgentId}
-                                    onChange={(e) => setTargetAgentId(e.target.value)}
-                                    className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-3 py-2 text-white"
-                                >
-                                    {agents.map((agent) => (
-                                        <option key={agent.id} value={agent.id}>
-                                            {agent.name} {agent.is_default ? '(默认)' : ''}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onChange={(val) => setTargetAgentId(val)}
+                                    options={agents.map((agent) => ({
+                                        value: agent.id,
+                                        label: `${agent.name} ${agent.is_default ? '(默认)' : ''}`
+                                    }))}
+                                    placeholder="请选择目标Agent"
+                                />
                             </div>
                         </div>
 
                         <div className="flex justify-end gap-3 px-6 py-4 border-t border-white/5">
-                            <button
-                                type="button"
+                            <Button
+                                variant="ghost"
                                 onClick={() => setIsTemplateModalOpen(false)}
-                                className="px-4 py-2 text-gray-400 hover:text-white"
                             >
                                 取消
-                            </button>
-                            <button
-                                type="button"
+                            </Button>
+                            <Button
+                                variant="primary"
                                 onClick={() => void handleApplyTemplate()}
                                 disabled={isApplyingTemplate || !targetAgentId}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg disabled:opacity-50"
+                                isLoading={isApplyingTemplate}
                             >
-                                {isApplyingTemplate ? '应用中...' : '应用'}
-                            </button>
+                                应用
+                            </Button>
                         </div>
                     </div>
                 </div>

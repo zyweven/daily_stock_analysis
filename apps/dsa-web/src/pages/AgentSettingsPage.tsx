@@ -3,6 +3,7 @@ import { AgentApi, SkillApi, ToolApi } from '../api';
 import type { AgentProfile } from '../api/agents';
 import type { AgentBoundSkill, Skill, SkillPreviewResult } from '../api/skills';
 import type { ToolDefinition } from '../api/tools';
+import { Select, Button } from '../components/common';
 import { toast } from 'react-hot-toast';
 
 type SkillSelectionState = {
@@ -386,13 +387,13 @@ const AgentSettingsPage: React.FC = () => {
                     <h2 className="font-bold text-lg text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">
                         我的助手
                     </h2>
-                    <button
+                    <Button
+                        variant="ghost"
                         onClick={handleCreateNew}
-                        className="p-2 bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 rounded-lg transition-all duration-200"
                         title="新建助手"
                     >
                         +
-                    </button>
+                    </Button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
@@ -432,26 +433,25 @@ const AgentSettingsPage: React.FC = () => {
                     </h2>
                     <div className="flex space-x-3">
                         {selectedAgentId && (
-                            <button
+                            <Button
+                                variant="danger"
                                 onClick={() => {
                                     void handleDelete(selectedAgentId);
                                 }}
-                                className="px-4 py-2 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20 transition-all text-sm font-medium"
                             >
                                 删除 Agent
-                            </button>
+                            </Button>
                         )}
-                        <button
+                        <Button
+                            variant="gradient"
                             onClick={() => {
                                 void handleSave();
                             }}
                             disabled={isSaving || isLoadingMeta}
-                            className={`px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg transition-all text-sm font-medium ${
-                                isSaving ? 'opacity-70 cursor-wait' : ''
-                            }`}
+                            isLoading={isSaving}
                         >
                             {isSaving ? '保存中...' : '保存配置'}
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
@@ -563,25 +563,20 @@ const AgentSettingsPage: React.FC = () => {
                                                                     {field.label}
                                                                 </label>
                                                                 {field.type === 'select' && field.options && (
-                                                                    <select
+                                                                    <Select
                                                                         value={value}
-                                                                        onChange={(e) => {
+                                                                        onChange={(val) => {
                                                                             setToolConfigs(prev => ({
                                                                                 ...prev,
                                                                                 [tool.function.name]: {
                                                                                     ...prev[tool.function.name],
-                                                                                    [key]: e.target.value
+                                                                                    [key]: val
                                                                                 }
                                                                             }));
                                                                         }}
-                                                                        className="w-full bg-gray-900/50 border border-gray-700/50 rounded-lg px-3 py-2 text-sm text-gray-300"
-                                                                    >
-                                                                        {field.options.map((opt) => (
-                                                                            <option key={opt.value} value={opt.value}>
-                                                                                {opt.label}
-                                                                            </option>
-                                                                        ))}
-                                                                    </select>
+                                                                        options={field.options}
+                                                                        placeholder="请选择"
+                                                                    />
                                                                 )}
                                                                 {field.type === 'text' && (
                                                                     <input
