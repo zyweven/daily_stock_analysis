@@ -183,7 +183,8 @@ def get_history_detail(
             report_type=result.get("report_type"),
             created_at=result.get("created_at"),
             current_price=current_price,
-            change_pct=change_pct
+            change_pct=change_pct,
+            model_name=result.get("models_used")
         )
         
         summary = ReportSummary(

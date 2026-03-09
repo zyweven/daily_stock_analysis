@@ -24,6 +24,7 @@ export interface ReportMeta {
   createdAt: string;
   currentPrice?: number;
   changePct?: number;
+  modelName?: string;
 }
 
 /** 情绪标签 */

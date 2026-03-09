@@ -422,6 +422,9 @@ class DatabaseManager:
         if save_snapshot and context_snapshot is not None:
             context_text = self._safe_json_dumps(context_snapshot)
 
+        # 获取模型名称
+        models_used = self._get_models_used_from_result(result)
+
         record = AnalysisHistory(
             query_id=query_id,
             code=result.code,
@@ -438,6 +441,7 @@ class DatabaseManager:
             secondary_buy=sniper_points.get("secondary_buy"),
             stop_loss=sniper_points.get("stop_loss"),
             take_profit=sniper_points.get("take_profit"),
+            models_used=models_used,
             created_at=datetime.now(),
         )
 
@@ -866,6 +870,43 @@ class DatabaseManager:
             "stop_loss": self._parse_sniper_value(raw_points.get("stop_loss")),
             "take_profit": self._parse_sniper_value(raw_points.get("take_profit")),
         }
+
+    def _get_models_used_from_result(self, result: Any) -> Optional[str]:
+        """
+        从分析结果中获取使用的模型名称
+
+        尝试从多个来源获取模型名称:
+        1. result 对象的 model_name 属性
+        2. 从全局 analyzer 获取当前模型名称
+        3. 从配置获取默认模型
+
+        Args:
+            result: AnalysisResult 对象
+
+        Returns:
+            模型名称或 None
+        """
+        try:
+            # 1. 尝试直接从 result 获取
+            if hasattr(result, 'model_name') and result.model_name:
+                return result.model_name
+
+            # 2. 从全局 analyzer 获取当前模型名称
+            from src.analyzer import get_analyzer
+            analyzer = get_analyzer()
+            if hasattr(analyzer, '_current_model_name') and analyzer._current_model_name:
+                return analyzer._current_model_name
+
+            # 3. 从配置获取默认模型
+            from src.config import get_config
+            config = get_config()
+            if hasattr(config, 'gemini_model') and config.gemini_model:
+                return config.gemini_model
+
+        except Exception as e:
+            logger.debug(f"获取模型名称失败: {e}")
+
+        return None
 
     @staticmethod
     def _build_fallback_url_key(

@@ -119,3 +119,104 @@
 python -m py_compile main.py src/*.py data_provider/*.py
 flake8 main.py src/ --max-line-length=120
 ```
+
+## 7. 修改代码时的防回归原则
+
+### 7.1 多层调用链参数传递
+
+当新增功能需要在多层调用链中传递参数时，必须确保参数在每一层都被正确传递：
+
+**必须验证的调用链（以模型选择为例）：**
+```
+API Endpoint (analysis.py)
+  ↓ 传递 model_name
+TaskQueue (task_queue.py)
+  ↓ 传递 model_name
+AnalysisService (analysis_service.py)
+  ↓ 传递 model_name
+StockAnalysisPipeline (pipeline.py)
+  ↓ 使用 model_name 初始化 analyzer
+GeminiAnalyzer (analyzer.py)
+```
+
+**检查清单：**
+- [ ] 确认每一层函数签名包含新参数
+- [ ] 确认每一层都向下传递该参数
+- [ ] 确认新增参数有默认值（避免破坏旧调用）
+- [ ] 确认修改后立即运行 `python tests/test_smoke.py`
+
+### 7.2 添加新功能的步骤
+
+1. **先写测试**：在 `tests/test_regression.py` 中添加回归测试
+2. **修改底层**：先修改最底层被调用的函数，支持新参数
+3. **逐层连接**：向上逐层传递参数，每层都运行冒烟测试
+4. **验证完整流程**：运行完整测试 `pytest tests/ -v`
+
+### 7.3 回归测试要求
+
+**必须添加测试的场景：**
+- 修改函数签名（新增/删除参数）
+- 修改返回值结构
+- 修改多层调用链
+- 修复 bug（防止回归）
+
+**测试文件位置：**
+- 功能测试：`tests/test_<feature_name>.py`
+- 回归测试：`tests/test_regression.py`
+- 冒烟测试：`tests/test_smoke.py`
+
+**运行测试：**
+```bash
+# 快速验证（每次修改后必须运行）
+python tests/test_smoke.py
+
+# 完整回归测试
+pytest tests/test_regression.py -v
+
+# 所有测试
+pytest tests/ -v
+```
+
+### 7.4 参数传递最佳实践
+
+**推荐：使用 Context 对象（对于复杂场景）**
+```python
+@dataclass
+class AnalysisContext:
+    stock_code: str
+    model_name: Optional[str] = None
+    # 其他参数...
+
+def analyze(ctx: AnalysisContext) -> Result:
+    # 整个调用链只传一个对象
+    return pipeline.process(ctx)
+```
+
+**推荐：默认值保护（对于简单场景）**
+```python
+def analyze_stock(
+    stock_code: str,
+    model_name: Optional[str] = None,  # 新增参数必须有默认值
+) -> Result:
+    return pipeline.process(stock_code, model_name=model_name)
+```
+
+**禁止：破坏向后兼容**
+```python
+# 错误！破坏旧调用
+def analyze_stock(stock_code: str, model_name: str) -> Result:
+    ...
+
+# 正确！保持兼容
+def analyze_stock(stock_code: str, model_name: Optional[str] = None) -> Result:
+    ...
+```
+
+### 7.5 代码审查自检清单
+
+修改多层调用代码前，自问：
+1. 我画出了完整的调用链吗？
+2. 每一层都正确传递参数了吗？
+3. 新增参数有默认值吗？
+4. 我添加了回归测试吗？
+5. 运行 `python tests/test_smoke.py` 通过了吗？

@@ -53,6 +53,7 @@ class TaskInfo:
     result: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     report_type: str = "detailed"
+    model_name: Optional[str] = None
     created_at: datetime = field(default_factory=datetime.now)
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -67,6 +68,7 @@ class TaskInfo:
             "progress": self.progress,
             "message": self.message,
             "report_type": self.report_type,
+            "model_name": self.model_name,
             "created_at": self.created_at.isoformat(),
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
@@ -85,6 +87,7 @@ class TaskInfo:
             result=self.result,
             error=self.error,
             report_type=self.report_type,
+            model_name=self.model_name,
             created_at=self.created_at,
             started_at=self.started_at,
             completed_at=self.completed_at,
@@ -199,19 +202,21 @@ class AnalysisTaskQueue:
         stock_name: Optional[str] = None,
         report_type: str = "detailed",
         force_refresh: bool = False,
+        model_name: Optional[str] = None,
     ) -> TaskInfo:
         """
         提交分析任务
-        
+
         Args:
             stock_code: 股票代码
             stock_name: 股票名称（可选）
             report_type: 报告类型
             force_refresh: 是否强制刷新
-            
+            model_name: 模型名称（可选）
+
         Returns:
             TaskInfo: 任务信息
-            
+
         Raises:
             DuplicateTaskError: 股票正在分析中
         """
@@ -220,7 +225,7 @@ class AnalysisTaskQueue:
             if stock_code in self._analyzing_stocks:
                 existing_task_id = self._analyzing_stocks[stock_code]
                 raise DuplicateTaskError(stock_code, existing_task_id)
-            
+
             # 创建任务
             task_id = uuid.uuid4().hex
             task_info = TaskInfo(
@@ -230,12 +235,13 @@ class AnalysisTaskQueue:
                 status=TaskStatus.PENDING,
                 message="任务已加入队列",
                 report_type=report_type,
+                model_name=model_name,
             )
-            
+
             # 注册任务
             self._tasks[task_id] = task_info
             self._analyzing_stocks[stock_code] = task_id
-            
+
             # 提交到线程池执行
             future = self.executor.submit(
                 self._execute_task,
@@ -243,14 +249,15 @@ class AnalysisTaskQueue:
                 stock_code,
                 report_type,
                 force_refresh,
+                model_name,
             )
             self._futures[task_id] = future
-            
+
             logger.info(f"[TaskQueue] 任务已提交: {stock_code} -> {task_id}")
-        
+
         # 广播任务创建事件（锁外执行避免死锁）
         self._broadcast_event("task_created", task_info.to_dict())
-        
+
         return task_info
     
     def get_task(self, task_id: str) -> Optional[TaskInfo]:
@@ -325,16 +332,18 @@ class AnalysisTaskQueue:
         stock_code: str,
         report_type: str,
         force_refresh: bool,
+        model_name: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         执行分析任务（在线程池中运行）
-        
+
         Args:
             task_id: 任务 ID
             stock_code: 股票代码
             report_type: 报告类型
             force_refresh: 是否强制刷新
-            
+            model_name: 模型名称（可选）
+
         Returns:
             分析结果字典
         """
@@ -347,13 +356,13 @@ class AnalysisTaskQueue:
             task.started_at = datetime.now()
             task.message = "正在分析中..."
             task.progress = 10
-        
+
         self._broadcast_event("task_started", task.to_dict())
-        
+
         try:
             # 导入分析服务（延迟导入避免循环依赖）
             from src.services.analysis_service import AnalysisService
-            
+
             # 执行分析
             service = AnalysisService()
             result = service.analyze_stock(
@@ -361,6 +370,7 @@ class AnalysisTaskQueue:
                 report_type=report_type,
                 force_refresh=force_refresh,
                 query_id=task_id,
+                model_name=model_name,
             )
             
             if result:

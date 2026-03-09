@@ -146,6 +146,7 @@ def _handle_async_analysis(
             stock_name=None,  # 名称在分析过程中获取
             report_type=request.report_type,
             force_refresh=request.force_refresh,
+            model_name=request.model_name,
         )
         
         # 返回 202 Accepted
@@ -179,21 +180,22 @@ def _handle_sync_analysis(
 ) -> AnalysisResultResponse:
     """
     处理同步分析请求
-    
+
     直接执行分析，等待完成后返回结果
     """
     import uuid
     from src.services.analysis_service import AnalysisService
-    
+
     query_id = uuid.uuid4().hex
-    
+
     try:
         service = AnalysisService()
         result = service.analyze_stock(
             stock_code=stock_code,
             report_type=request.report_type,
             force_refresh=request.force_refresh,
-            query_id=query_id
+            query_id=query_id,
+            model_name=request.model_name
         )
 
         if result is None:
@@ -443,6 +445,7 @@ def get_analysis_status(task_id: str) -> TaskStatus:
                     stock_name=record.name,
                     report_type=getattr(record, 'report_type', None),
                     created_at=record.created_at.isoformat() if record.created_at else None,
+                    model_name=getattr(record, 'models_used', None),
                 ),
                 summary=ReportSummary(
                     sentiment_score=record.sentiment_score,
@@ -526,6 +529,7 @@ def _build_analysis_report(
         created_at=meta_data.get("created_at", datetime.now().isoformat()),
         current_price=meta_data.get("current_price"),
         change_pct=meta_data.get("change_pct"),
+        model_name=meta_data.get("model_name"),
     )
 
     summary = ReportSummary(

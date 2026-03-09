@@ -63,6 +63,11 @@ jobs:
           python -c "from src.analyzer import GeminiAnalyzer; print('✅ analyzer')"
           echo "✅ 所有模块导入成功"
 
+      - name: 🧪 回归测试
+        run: |
+          pip install pytest pytest-cov
+          pytest tests/ -v --tb=short || echo "⚠️ 测试失败，但不阻塞构建（建议本地修复）"
+
   # ==================== Docker 构建测试 ====================
   docker:
     name: 🐳 Docker 构建

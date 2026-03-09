@@ -36,7 +36,8 @@ class AnalysisService:
         report_type: str = "detailed",
         force_refresh: bool = False,
         query_id: Optional[str] = None,
-        send_notification: bool = True
+        send_notification: bool = True,
+        model_name: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """
         执行股票分析
@@ -47,7 +48,8 @@ class AnalysisService:
             force_refresh: 是否强制刷新
             query_id: 查询 ID（可选）
             send_notification: 是否发送通知（API 触发默认发送）
-            
+            model_name: 模型名称（可选）
+
         Returns:
             分析结果字典，包含:
             - stock_code: 股票代码
@@ -71,7 +73,8 @@ class AnalysisService:
             pipeline = StockAnalysisPipeline(
                 config=config,
                 query_id=query_id,
-                query_source="api"
+                query_source="api",
+                model_name=model_name
             )
             
             # 确定报告类型
@@ -88,26 +91,33 @@ class AnalysisService:
             if result is None:
                 logger.warning(f"分析股票 {stock_code} 返回空结果")
                 return None
-            
+
+            # 从 pipeline 的 analyzer 获取实际使用的模型名称
+            actual_model_name = None
+            if hasattr(pipeline, 'analyzer') and hasattr(pipeline.analyzer, '_current_model_name'):
+                actual_model_name = pipeline.analyzer._current_model_name
+
             # 构建响应
-            return self._build_analysis_response(result, query_id)
-            
+            return self._build_analysis_response(result, query_id, actual_model_name)
+
         except Exception as e:
             logger.error(f"分析股票 {stock_code} 失败: {e}", exc_info=True)
             return None
-    
+
     def _build_analysis_response(
-        self, 
-        result: Any, 
-        query_id: str
+        self,
+        result: Any,
+        query_id: str,
+        model_name: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         构建分析响应
-        
+
         Args:
             result: AnalysisResult 对象
             query_id: 查询 ID
-            
+            model_name: 模型名称（可选）
+
         Returns:
             格式化的响应字典
         """
@@ -115,10 +125,13 @@ class AnalysisService:
         sniper_points = {}
         if hasattr(result, 'get_sniper_points'):
             sniper_points = result.get_sniper_points() or {}
-        
+
         # 计算情绪标签
         sentiment_label = self._get_sentiment_label(result.sentiment_score)
-        
+
+        # 使用传入的模型名称，如果没有则尝试从结果获取
+        actual_model_name = model_name or self._get_model_name_from_result(result)
+
         # 构建报告结构
         report = {
             "meta": {
@@ -128,6 +141,7 @@ class AnalysisService:
                 "report_type": "detailed",
                 "current_price": result.current_price,
                 "change_pct": result.change_pct,
+                "model_name": actual_model_name,
             },
             "summary": {
                 "analysis_summary": result.analysis_summary,
@@ -156,6 +170,53 @@ class AnalysisService:
             "report": report,
         }
     
+    def _get_model_name_from_result(self, result: Any) -> Optional[str]:
+        """
+        从分析结果中获取模型名称
+
+        尝试从多个来源获取模型名称:
+        1. result 对象的 model_name 属性
+        2. result 的 raw_response 中解析
+        3. 从全局 analyzer 获取
+
+        Args:
+            result: AnalysisResult 对象
+
+        Returns:
+            模型名称或 None
+        """
+        try:
+            # 1. 尝试直接从 result 获取
+            if hasattr(result, 'model_name') and result.model_name:
+                return result.model_name
+
+            # 2. 从 raw_response 解析 (JSON 格式)
+            if hasattr(result, 'raw_response') and result.raw_response:
+                try:
+                    import json
+                    raw_data = json.loads(result.raw_response)
+                    if 'model' in raw_data:
+                        return raw_data['model']
+                except (json.JSONDecodeError, TypeError):
+                    pass
+
+            # 3. 从全局 analyzer 获取当前模型名称
+            from src.analyzer import get_analyzer
+            analyzer = get_analyzer()
+            if hasattr(analyzer, '_current_model_name') and analyzer._current_model_name:
+                return analyzer._current_model_name
+
+            # 4. 从配置获取默认模型
+            from src.config import get_config
+            config = get_config()
+            if hasattr(config, 'gemini_model') and config.gemini_model:
+                return config.gemini_model
+
+        except Exception as e:
+            logger.debug(f"获取模型名称失败: {e}")
+
+        return None
+
     def _get_sentiment_label(self, score: int) -> str:
         """
         根据评分获取情绪标签

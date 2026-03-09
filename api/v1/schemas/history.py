@@ -97,7 +97,7 @@ class NewsIntelResponse(BaseModel):
 
 class ReportMeta(BaseModel):
     """报告元信息"""
-    
+
     query_id: str = Field(..., description="分析记录唯一标识")
     stock_code: str = Field(..., description="股票代码")
     stock_name: Optional[str] = Field(None, description="股票名称")
@@ -105,6 +105,7 @@ class ReportMeta(BaseModel):
     created_at: Optional[str] = Field(None, description="创建时间")
     current_price: Optional[float] = Field(None, description="分析时股价")
     change_pct: Optional[float] = Field(None, description="分析时涨跌幅(%)")
+    model_name: Optional[str] = Field(None, description="分析使用的模型名称")
 
 
 class ReportSummary(BaseModel):

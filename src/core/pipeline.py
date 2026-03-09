@@ -51,14 +51,20 @@ class StockAnalysisPipeline:
         source_message: Optional[BotMessage] = None,
         query_id: Optional[str] = None,
         query_source: Optional[str] = None,
-        save_context_snapshot: Optional[bool] = None
+        save_context_snapshot: Optional[bool] = None,
+        model_name: Optional[str] = None
     ):
         """
         初始化调度器
-        
+
         Args:
             config: 配置对象（可选，默认使用全局配置）
             max_workers: 最大并发线程数（可选，默认从配置读取）
+            source_message: 源消息（可选）
+            query_id: 查询 ID（可选）
+            query_source: 查询来源（可选）
+            save_context_snapshot: 是否保存上下文快照（可选）
+            model_name: 模型名称（可选）
         """
         self.config = config or get_config()
         self.max_workers = max_workers or self.config.max_workers
@@ -68,13 +74,21 @@ class StockAnalysisPipeline:
         self.save_context_snapshot = (
             self.config.save_context_snapshot if save_context_snapshot is None else save_context_snapshot
         )
-        
+        self.model_name = model_name
+
         # 初始化各模块
         self.db = get_db()
         self.fetcher_manager = DataFetcherManager()
         # 不再单独创建 akshare_fetcher，统一使用 fetcher_manager 获取增强数据
         self.trend_analyzer = StockTrendAnalyzer()  # 趋势分析器
-        self.analyzer = GeminiAnalyzer()
+
+        # 如果有指定模型名称，使用指定模型初始化 analyzer
+        if model_name:
+            model_params = {"model": model_name}
+            self.analyzer = GeminiAnalyzer(model_params=model_params)
+        else:
+            self.analyzer = GeminiAnalyzer()
+
         self.notifier = NotificationService(source_message=source_message)
         
         # 初始化搜索服务
