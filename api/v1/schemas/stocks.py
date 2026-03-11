@@ -78,12 +78,12 @@ class KLineData(BaseModel):
 
 class StockHistoryResponse(BaseModel):
     """股票历史行情响应"""
-    
+
     stock_code: str = Field(..., description="股票代码")
     stock_name: Optional[str] = Field(None, description="股票名称")
     period: str = Field(..., description="K 线周期")
     data: List[KLineData] = Field(default_factory=list, description="K 线数据列表")
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -91,5 +91,92 @@ class StockHistoryResponse(BaseModel):
                 "stock_name": "贵州茅台",
                 "period": "daily",
                 "data": []
+            }
+        }
+
+
+# ==========================================
+# 智能导入相关模型
+# ==========================================
+
+class StockImportItem(BaseModel):
+    """导入的股票项"""
+
+    code: Optional[str] = Field(None, description="股票代码")
+    name: Optional[str] = Field(None, description="股票名称")
+    confidence: str = Field("medium", description="识别置信度 (high/medium/low)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "code": "600519",
+                "name": "贵州茅台",
+                "confidence": "high"
+            }
+        }
+
+
+class ImageExtractRequest(BaseModel):
+    """图片识别请求"""
+
+    image_data: str = Field(..., description="Base64 编码的图片数据")
+    mime_type: str = Field("image/jpeg", description="图片 MIME 类型")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "image_data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                "mime_type": "image/png"
+            }
+        }
+
+
+class ImageExtractResponse(BaseModel):
+    """图片识别响应"""
+
+    items: List[StockImportItem] = Field(default_factory=list, description="识别到的股票列表")
+    raw_text: str = Field("", description="LLM 原始响应")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "items": [
+                    {"code": "600519", "name": "贵州茅台", "confidence": "high"},
+                    {"code": "000858", "name": "五粮液", "confidence": "high"}
+                ],
+                "raw_text": "[{\"code\":\"600519\",\"name\":\"贵州茅台\",\"confidence\":\"high\"}]"
+            }
+        }
+
+
+class ParseImportRequest(BaseModel):
+    """文件/文本解析请求"""
+
+    content: str = Field(..., description="文本内容或 Base64 编码的文件数据")
+    content_type: str = Field("text", description="内容类型 (text/csv/excel)")
+    filename: Optional[str] = Field(None, description="文件名（用于格式检测）")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "content": "600519 贵州茅台\n000858 五粮液",
+                "content_type": "text",
+                "filename": None
+            }
+        }
+
+
+class ParseImportResponse(BaseModel):
+    """文件/文本解析响应"""
+
+    items: List[StockImportItem] = Field(default_factory=list, description="解析到的股票列表")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "items": [
+                    {"code": "600519", "name": "贵州茅台", "confidence": "medium"},
+                    {"code": "000858", "name": "五粮液", "confidence": "medium"}
+                ]
             }
         }

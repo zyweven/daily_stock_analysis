@@ -17,6 +17,11 @@ from api.v1.schemas.stocks import (
     StockQuote,
     StockHistoryResponse,
     KLineData,
+    ImageExtractRequest,
+    ImageExtractResponse,
+    ParseImportRequest,
+    ParseImportResponse,
+    StockImportItem,
 )
 from api.v1.schemas.common import ErrorResponse
 from src.services.stock_service import StockService
@@ -314,3 +319,183 @@ def search_stocks(q: str = Query(..., min_length=1, description="搜索关键词
     from src.services.stock_manager import StockManageService
     service = StockManageService()
     return service.search_stocks(q)
+
+
+# ==========================================
+# 智能导入接口
+# ==========================================
+
+@router.post(
+    "/extract-from-image",
+    response_model=ImageExtractResponse,
+    responses={
+        400: {"description": "图片无效或格式不支持", "model": ErrorResponse},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="从图片识别股票代码",
+    description="使用 Vision LLM 从图片中提取股票代码和名称"
+)
+def extract_from_image(request: ImageExtractRequest) -> ImageExtractResponse:
+    """
+    从图片识别股票代码
+
+    使用 Vision LLM 从图片中提取股票代码和名称
+
+    Args:
+        request: 图片识别请求（Base64 编码的图片数据）
+
+    Returns:
+        ImageExtractResponse: 识别结果
+
+    Raises:
+        HTTPException: 400 - 图片无效或格式不支持
+        HTTPException: 500 - 识别失败
+    """
+    try:
+        import base64
+        from src.services.image_stock_extractor import extract_stock_codes_from_image
+
+        # 解码 Base64 图片数据
+        try:
+            image_bytes = base64.b64decode(request.image_data)
+        except Exception as e:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_image_data",
+                    "message": f"Base64 解码失败: {str(e)}"
+                }
+            )
+
+        # 验证 MIME 类型
+        allowed_types = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+        if request.mime_type not in allowed_types:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "unsupported_mime_type",
+                    "message": f"不支持的图片格式: {request.mime_type}"
+                }
+            )
+
+        # 调用识别服务
+        items, raw_text = extract_stock_codes_from_image(image_bytes, request.mime_type)
+
+        # 转换为响应模型
+        stock_items = [
+            StockImportItem(
+                code=code,
+                name=name,
+                confidence=confidence
+            )
+            for code, name, confidence in items
+        ]
+
+        return ImageExtractResponse(
+            items=stock_items,
+            raw_text=raw_text
+        )
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # 图片验证或识别失败
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "extraction_failed",
+                "message": str(e)
+            }
+        )
+    except Exception as e:
+        logger.error(f"图片识别失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": f"图片识别失败: {str(e)}"
+            }
+        )
+
+
+@router.post(
+    "/parse-import",
+    response_model=ParseImportResponse,
+    responses={
+        400: {"description": "解析失败或格式不支持", "model": ErrorResponse},
+        500: {"description": "服务器错误", "model": ErrorResponse},
+    },
+    summary="解析导入文件或文本",
+    description="解析 CSV/Excel/文本为股票列表"
+)
+def parse_import(request: ParseImportRequest) -> ParseImportResponse:
+    """
+    解析导入文件或文本
+
+    解析 CSV/Excel/文本为股票列表
+
+    Args:
+        request: 解析请求
+
+    Returns:
+        ParseImportResponse: 解析结果
+
+    Raises:
+        HTTPException: 400 - 解析失败或格式不支持
+        HTTPException: 500 - 服务器错误
+    """
+    try:
+        from src.services.import_parser import parse_import_from_bytes, parse_import_from_text
+
+        if request.content_type == "text":
+            # 纯文本解析
+            items = parse_import_from_text(request.content)
+        else:
+            # 文件解析（CSV/Excel）
+            import base64
+            try:
+                file_bytes = base64.b64decode(request.content)
+            except Exception as e:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "invalid_content",
+                        "message": f"Base64 解码失败: {str(e)}"
+                    }
+                )
+
+            items = parse_import_from_bytes(file_bytes, request.filename)
+
+        # 转换为响应模型
+        stock_items = [
+            StockImportItem(
+                code=code,
+                name=name,
+                confidence=confidence
+            )
+            for code, name, confidence in items
+        ]
+
+        return ParseImportResponse(items=stock_items)
+
+    except HTTPException:
+        raise
+    except ValueError as e:
+        # 解析失败
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": "parse_failed",
+                "message": str(e)
+            }
+        )
+    except Exception as e:
+        logger.error(f"解析导入失败: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": f"解析导入失败: {str(e)}"
+            }
+        )
+
