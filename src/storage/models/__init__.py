@@ -20,6 +20,7 @@ from src.storage.models.backtestsummary import BacktestSummary
 from src.storage.models.skill import Skill
 from src.storage.models.agentskill import AgentSkill
 from src.storage.models.portfolioposition import PortfolioPosition
+from src.storage.models.llmusage import LLMUsage
 
 __all__ = [
     'SystemConfig',
@@ -35,4 +36,5 @@ __all__ = [
     'Skill',
     'AgentSkill',
     'PortfolioPosition',
+    'LLMUsage',
 ]

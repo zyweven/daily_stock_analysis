@@ -18,6 +18,7 @@ from typing import Optional, Dict, Any, List
 from json_repair import repair_json
 
 from src.config import get_config
+from src.storage import persist_llm_usage
 
 logger = logging.getLogger(__name__)
 
@@ -578,6 +579,15 @@ class GeminiAnalyzer:
                         raise
 
                 if response and response.choices and response.choices[0].message.content:
+                    # 记录 LLM usage
+                    if response.usage:
+                        usage = {
+                            "prompt_tokens": response.usage.prompt_tokens or 0,
+                            "completion_tokens": response.usage.completion_tokens or 0,
+                            "total_tokens": response.usage.total_tokens or 0,
+                        }
+                        persist_llm_usage(usage, model_name, call_type="analysis")
+                        logger.debug(f"[LLM Usage] prompt={usage['prompt_tokens']}, completion={usage['completion_tokens']}, total={usage['total_tokens']}")
                     return response.choices[0].message.content
                 else:
                     raise ValueError("OpenAI API 返回空响应")
