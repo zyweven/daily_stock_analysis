@@ -23,12 +23,13 @@ from src.config import get_config, Config
 from src.storage import get_db
 from data_provider import DataFetcherManager
 from data_provider.realtime_types import ChipDistribution
-<<<<<<< HEAD
 from src.analyzer import GeminiAnalyzer, AnalysisResult, STOCK_NAME_MAP, fill_chip_structure_if_needed
 from src.notification import NotificationService, NotificationChannel
 from src.search_service import SearchService
 from src.enums import ReportType
 from src.stock_analyzer import StockTrendAnalyzer, TrendAnalysisResult
+from src.core.trading_calendar import get_market_for_stock, is_market_open
+import pandas as pd
 from bot.models import BotMessage
 
 
@@ -227,10 +228,12 @@ class StockAnalysisPipeline:
                 # 获取历史数据进行趋势分析
                 context = self.db.get_analysis_context(code)
                 if context and 'raw_data' in context:
-                    import pandas as pd
                     raw_data = context['raw_data']
                     if isinstance(raw_data, list) and len(raw_data) > 0:
                         df = pd.DataFrame(raw_data)
+                        # Issue #234: 盘中用实时价增强历史数据计算 MA
+                        if self.config.enable_realtime_quote and realtime_quote:
+                            df = self._augment_historical_with_realtime(df, realtime_quote, code)
                         trend_result = self.trend_analyzer.analyze(df, code)
                         logger.info(f"[{code}] 趋势分析: {trend_result.trend_status.value}, "
                                   f"买入信号={trend_result.buy_signal.value}, 评分={trend_result.signal_score}")
@@ -419,9 +422,69 @@ class StockAnalysisPipeline:
                 'risk_factors': trend_result.risk_factors,
             }
         
+        # Issue #234: 盘中用实时价覆盖 today 数据，计算 ma_status
+        if realtime_quote and trend_result and getattr(trend_result, 'ma5', 0) > 0:
+            price = getattr(realtime_quote, 'price', None)
+            if price is not None and price > 0:
+                yesterday_close = None
+                if enhanced.get('yesterday') and isinstance(enhanced['yesterday'], dict):
+                    yesterday_close = enhanced['yesterday'].get('close')
+                orig_today = enhanced.get('today') or {}
+                open_p = getattr(realtime_quote, 'open_price', None) or getattr(
+                    realtime_quote, 'pre_close', None
+                ) or yesterday_close or orig_today.get('open') or price
+                high_p = getattr(realtime_quote, 'high', None) or price
+                low_p = getattr(realtime_quote, 'low', None) or price
+                vol = getattr(realtime_quote, 'volume', None)
+                amt = getattr(realtime_quote, 'amount', None)
+                pct = getattr(realtime_quote, 'change_pct', None)
+                realtime_today = {
+                    'close': price,
+                    'open': open_p,
+                    'high': high_p,
+                    'low': low_p,
+                    'ma5': trend_result.ma5,
+                    'ma10': trend_result.ma10,
+                    'ma20': trend_result.ma20,
+                }
+                if vol is not None:
+                    realtime_today['volume'] = vol
+                if amt is not None:
+                    realtime_today['amount'] = amt
+                if pct is not None:
+                    realtime_today['pct_chg'] = pct
+                for k, v in orig_today.items():
+                    if k not in realtime_today and v is not None:
+                        realtime_today[k] = v
+                enhanced['today'] = realtime_today
+                enhanced['ma_status'] = self._compute_ma_status(
+                    price, trend_result.ma5, trend_result.ma10, trend_result.ma20
+                )
+                enhanced['date'] = date.today().isoformat()
+                if yesterday_close is not None:
+                    try:
+                        yc = float(yesterday_close)
+                        if yc > 0:
+                            enhanced['price_change_ratio'] = round(
+                                (price - yc) / yc * 100, 2
+                            )
+                    except (TypeError, ValueError):
+                        pass
+                if vol is not None and enhanced.get('yesterday'):
+                    yest_vol = enhanced['yesterday'].get('volume') if isinstance(
+                        enhanced['yesterday'], dict
+                    ) else None
+                    if yest_vol is not None:
+                        try:
+                            yv = float(yest_vol)
+                            if yv > 0:
+                                enhanced['volume_change_ratio'] = round(
+                                    float(vol) / yv, 2
+                                )
+                        except (TypeError, ValueError):
+                            pass
+        
         return enhanced
-<<<<<<< HEAD
-=======
 
     def _analyze_with_agent(
         self, 
@@ -595,7 +658,6 @@ class StockAnalysisPipeline:
             if match:
                 return int(match.group())
         return default
->>>>>>> 7483b73 (fix(chip): fill chip_structure from data when LLM omits it (Fixes #589) (#598))
     
     def _describe_volume_ratio(self, volume_ratio: float) -> str:
         """
@@ -615,6 +677,101 @@ class StockAnalysisPipeline:
             return "明显放量"
         else:
             return "巨量"
+
+    def _compute_ma_status(self, close: float, ma5: float, ma10: float, ma20: float) -> str:
+        """
+        计算均线状态（多头/空头/短期强弱/震荡）。
+        """
+        close = close or 0
+        ma5 = ma5 or 0
+        ma10 = ma10 or 0
+        ma20 = ma20 or 0
+        if close > ma5 > ma10 > ma20 > 0:
+            return "多头排列 📈"
+        elif close < ma5 < ma10 < ma20 and ma20 > 0:
+            return "空头排列 📉"
+        elif close > ma5 and ma5 > ma10:
+            return "短期向好 🔼"
+        elif close < ma5 and ma5 < ma10:
+            return "短期走弱 🔽"
+        else:
+            return "震荡整理 ↔️"
+
+    def _augment_historical_with_realtime(
+        self, df: pd.DataFrame, realtime_quote: Any, code: str
+    ) -> pd.DataFrame:
+        """
+        将实时行情追加/覆盖到历史 K 线，用于盘中计算 MA。
+        - 配置 enable_realtime_technical_indicators 关闭时直接返回原 df
+        - 非交易日（按标的市场）直接返回原 df
+        - 缺少有效实时价时直接返回原 df
+        """
+        try:
+            if df is None or df.empty or 'close' not in df.columns:
+                return df
+            if realtime_quote is None:
+                return df
+            price = getattr(realtime_quote, 'price', None)
+            if price is None or not (isinstance(price, (int, float)) and price > 0):
+                return df
+
+            if not getattr(self.config, 'enable_realtime_technical_indicators', True):
+                return df
+
+            # 市场开市判断（不可用时 fail-open）
+            mkt = get_market_for_stock(code)
+            if mkt and not is_market_open(mkt, date.today()):
+                return df
+
+            # 推断昨日收盘与今日 OHLC 兜底
+            yesterday_close = float(df.iloc[-1]['close']) if len(df) > 0 else price
+            open_p = getattr(realtime_quote, 'open_price', None) or getattr(
+                realtime_quote, 'pre_close', None
+            ) or yesterday_close
+            high_p = getattr(realtime_quote, 'high', None) or price
+            low_p = getattr(realtime_quote, 'low', None) or price
+            vol = getattr(realtime_quote, 'volume', None) or 0
+            amt = getattr(realtime_quote, 'amount', None)
+            pct = getattr(realtime_quote, 'change_pct', None)
+
+            # 决定是覆盖最后一行还是追加一行
+            last_val = df['date'].iloc[-1]
+            try:
+                last_date = last_val.date() if hasattr(last_val, 'date') else pd.Timestamp(last_val).date()
+            except Exception:
+                last_date = date.today()
+
+            df = df.copy()
+            if last_date >= date.today():
+                # 覆盖今日行
+                idx = df.index[-1]
+                df.loc[idx, 'close'] = price
+                df.loc[idx, 'open'] = open_p
+                df.loc[idx, 'high'] = high_p
+                df.loc[idx, 'low'] = low_p
+                if vol:
+                    df.loc[idx, 'volume'] = vol
+                if amt is not None:
+                    df.loc[idx, 'amount'] = amt
+                if pct is not None:
+                    df.loc[idx, 'pct_chg'] = pct
+            else:
+                # 追加虚拟今日行
+                new_row = {
+                    'code': code,
+                    'date': date.today(),
+                    'open': open_p,
+                    'high': high_p,
+                    'low': low_p,
+                    'close': price,
+                    'volume': vol,
+                    'amount': amt if amt is not None else 0,
+                    'pct_chg': pct if pct is not None else 0,
+                }
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            return df
+        except Exception:
+            return df
 
     def _build_context_snapshot(
         self,
