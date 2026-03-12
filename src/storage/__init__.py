@@ -12,7 +12,7 @@
 """
 
 from src.storage.base import Base
-from src.storage.manager import DatabaseManager, get_db
+from src.storage.manager import DatabaseManager, get_db, persist_llm_usage
 
 # 导出所有模型
 from src.storage.models import (
@@ -36,6 +36,7 @@ __all__ = [
     'Base',
     'DatabaseManager',
     'get_db',
+    'persist_llm_usage',
     # 模型
     'SystemConfig',
     'AgentProfile',
