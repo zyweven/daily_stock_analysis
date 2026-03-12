@@ -121,6 +121,7 @@ class Config:
     brave_api_keys: List[str] = field(default_factory=list)  # Brave Search API Keys
     serpapi_keys: List[str] = field(default_factory=list)  # SerpAPI Keys
     minimax_api_keys: List[str] = field(default_factory=list)  # MiniMax API Keys
+    searxng_base_urls: List[str] = field(default_factory=list)  # SearXNG 实例 URL（自建，无配额）
     
     # === 通知配置（可同时配置多个，全部推送）===
     
@@ -389,6 +390,10 @@ class Config:
         minimax_keys_str = os.getenv('MINIMAX_API_KEYS', '')
         minimax_api_keys = [k.strip() for k in minimax_keys_str.split(',') if k.strip()]
 
+        # SearXNG 实例地址（自建，无配额）
+        searxng_urls_str = os.getenv('SEARXNG_BASE_URLS', '')
+        searxng_base_urls = [u.strip() for u in searxng_urls_str.split(',') if u.strip()]
+
         # 企微消息类型与最大字节数逻辑
         wechat_msg_type = os.getenv('WECHAT_MSG_TYPE', 'markdown')
         wechat_msg_type_lower = wechat_msg_type.lower()
@@ -422,6 +427,7 @@ class Config:
             brave_api_keys=brave_api_keys,
             serpapi_keys=serpapi_keys,
             minimax_api_keys=minimax_api_keys,
+            searxng_base_urls=searxng_base_urls,
             wechat_webhook_url=os.getenv('WECHAT_WEBHOOK_URL'),
             feishu_webhook_url=os.getenv('FEISHU_WEBHOOK_URL'),
             telegram_bot_token=os.getenv('TELEGRAM_BOT_TOKEN'),

@@ -51,6 +51,17 @@ def _post_with_retry(url: str, *, headers: Dict[str, str], json: Dict[str, Any],
     return requests.post(url, headers=headers, json=json, timeout=timeout)
 
 
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type(_SEARCH_TRANSIENT_EXCEPTIONS),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def _get_with_retry(url: str, *, headers: Dict[str, str], params: Dict[str, Any], timeout: int) -> requests.Response:
+    """GET with retry on transient SSL/network errors."""
+    return requests.get(url, headers=headers, params=params, timeout=timeout)
+
+
 def fetch_url_content(url: str, timeout: int = 5) -> str:
     """
     获取 URL 网页正文内容 (使用 newspaper3k)
@@ -1131,6 +1142,129 @@ class MiniMaxSearchProvider(BaseSearchProvider):
             return '未知来源'
 
 
+class SearXNGSearchProvider:
+    """
+    SearXNG search engine provider (self-hosted, no quota).
+    base_urls act as keys for load balancing. Requires settings.yml enabling format: json.
+    """
+    def __init__(self, base_urls: List[str]):
+        self.base_urls = base_urls
+        self._cycle = cycle(base_urls)
+        self.name = "SearXNG"
+
+    @staticmethod
+    def _extract_domain(url: str) -> str:
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            return parsed.netloc.replace("www.", "") or "未知来源"
+        except Exception:
+            return "未知来源"
+
+    @staticmethod
+    def _parse_http_error(response) -> str:
+        try:
+            raw_content_type = response.headers.get("content-type", "")
+            content_type = raw_content_type if isinstance(raw_content_type, str) else ""
+            if "json" in content_type:
+                data = response.json()
+                if isinstance(data, dict):
+                    msg = data.get("error") or data.get("message")
+                    if msg:
+                        return str(msg)
+                return str(data)
+            body = getattr(response, "text", "")
+            body = body.strip() if isinstance(body, str) else ""
+            return body[:200] if body else f"HTTP {response.status_code}"
+        except Exception:
+            body = getattr(response, "text", "")
+            body = body if isinstance(body, str) else ""
+            return f"HTTP {response.status_code}: {body[:200]}"
+
+    def search(self, query: str, max_results: int = 10, days: int = 7) -> 'SearchResponse':
+        base_url = next(self._cycle)
+        try:
+            base = base_url.rstrip("/")
+            search_url = base if base.endswith("/search") else base + "/search"
+
+            if days <= 1:
+                time_range = "day"
+            elif days <= 7:
+                time_range = "week"
+            elif days <= 30:
+                time_range = "month"
+            else:
+                time_range = "year"
+
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            }
+            params = {
+                "q": query,
+                "format": "json",
+                "time_range": time_range,
+                "pageno": 1,
+            }
+
+            response = _get_with_retry(search_url, headers=headers, params=params, timeout=10)
+            if response.status_code != 200:
+                error_msg = self._parse_http_error(response)
+                if response.status_code == 403:
+                    error_msg = (
+                        f"{error_msg}；SearXNG 实例可能未启用 JSON 输出（请检查 settings.yml）或拒绝访问"
+                    )
+                return SearchResponse(query=query, results=[], provider=self.name, success=False, error_message=error_msg)
+
+            try:
+                data = response.json()
+            except Exception:
+                return SearchResponse(query=query, results=[], provider=self.name, success=False, error_message="响应JSON解析失败")
+
+            if not isinstance(data, dict):
+                return SearchResponse(query=query, results=[], provider=self.name, success=False, error_message="响应格式无效")
+
+            raw = data.get("results", [])
+            if not isinstance(raw, list):
+                raw = []
+
+            results: List[SearchResult] = []
+            for item in raw:
+                if not isinstance(item, dict):
+                    continue
+                url_val = item.get("url")
+                if not url_val:
+                    continue
+                raw_published_date = item.get("publishedDate")
+                snippet = (item.get("content") or item.get("description") or "")[:500]
+                published_date = None
+                if raw_published_date:
+                    try:
+                        dt = datetime.fromisoformat(raw_published_date.replace("Z", "+00:00"))
+                        published_date = dt.strftime("%Y-%m-%d")
+                    except (ValueError, AttributeError):
+                        published_date = raw_published_date
+
+                results.append(
+                    SearchResult(
+                        title=item.get("title", ""),
+                        snippet=snippet,
+                        url=url_val,
+                        source=self._extract_domain(url_val),
+                        published_date=published_date,
+                    )
+                )
+                if len(results) >= max_results:
+                    break
+
+            return SearchResponse(query=query, results=results, provider=self.name, success=True)
+        except requests.exceptions.Timeout:
+            return SearchResponse(query=query, results=[], provider=self.name, success=False, error_message="请求超时")
+        except requests.exceptions.RequestException as e:
+            return SearchResponse(query=query, results=[], provider=self.name, success=False, error_message=f"网络请求失败: {e}")
+        except Exception as e:
+            return SearchResponse(query=query, results=[], provider=self.name, success=False, error_message=f"未知错误: {e}")
+
+
 class SearchService:
     """
     搜索服务
@@ -1168,6 +1302,7 @@ class SearchService:
         brave_keys: Optional[List[str]] = None,
         serpapi_keys: Optional[List[str]] = None,
         minimax_keys: Optional[List[str]] = None,
+        searxng_base_urls: Optional[List[str]] = None,
     ):
         """
         初始化搜索服务
@@ -1202,10 +1337,10 @@ class SearchService:
             self._providers.append(SerpAPISearchProvider(serpapi_keys))
             logger.info(f"已配置 SerpAPI 搜索，共 {len(serpapi_keys)} 个 API Key")
 
-        # 5. MiniMax 作为最后备选（国产搜索）
-        if minimax_keys:
-            self._providers.append(MiniMaxSearchProvider(minimax_keys))
-            logger.info(f"已配置 MiniMax 搜索，共 {len(minimax_keys)} 个 API Key")
+        # 6. SearXNG（自建实例，无配额兜底，最后兜底）
+        if searxng_base_urls:
+            self._providers.append(SearXNGSearchProvider(searxng_base_urls))
+            logger.info(f"已配置 SearXNG 搜索，共 {len(searxng_base_urls)} 个实例")
 
         if not self._providers:
             logger.warning("未配置任何搜索引擎 API Key，新闻搜索功能将不可用")
@@ -1784,6 +1919,7 @@ def get_search_service() -> SearchService:
             brave_keys=config.brave_api_keys,
             serpapi_keys=config.serpapi_keys,
             minimax_keys=config.minimax_api_keys,
+            searxng_base_urls=getattr(config, 'searxng_base_urls', []),
         )
     
     return _search_service
