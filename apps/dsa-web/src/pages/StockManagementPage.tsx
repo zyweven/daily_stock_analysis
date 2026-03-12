@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { stockApi } from '../api/stocks';
 import type { StockInfo } from '../api/stocks';
+import type { StockImportItem } from '../api/stockImport';
 import toast from 'react-hot-toast';
 import { Button, Card, IconButton } from '../components/common';
+import { IntelligentImport } from '../components/settings';
 
 const StockManagementPage: React.FC = () => {
     const [stocks, setStocks] = useState<StockInfo[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [filterActive, setFilterActive] = useState(false);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [useIntelligentImport, setUseIntelligentImport] = useState(false);
 
     // Form State
     const [newStockCode, setNewStockCode] = useState('');
@@ -125,6 +128,40 @@ const StockManagementPage: React.FC = () => {
             console.error("Update failed", error);
             const msg = error.response?.data?.message || error.response?.data?.detail || error.message || "操作失败";
             toast.error(msg);
+        }
+    };
+
+    const handleIntelligentImport = async (items: StockImportItem[]) => {
+        let successCount = 0;
+        let failCount = 0;
+
+        for (const item of items) {
+            if (!item.code) {
+                failCount++;
+                continue;
+            }
+
+            try {
+                await stockApi.add({
+                    code: item.code,
+                    name: item.name || undefined,
+                    tags: [],
+                    remark: `置信度: ${item.confidence}`,
+                });
+                successCount++;
+            } catch (error: any) {
+                console.error(`Failed to add ${item.code}`, error);
+                failCount++;
+            }
+        }
+
+        if (successCount > 0) {
+            toast.success(`成功导入 ${successCount} 只股票${failCount > 0 ? `，失败 ${failCount} 只` : ''}`);
+            loadStocks();
+            setIsAddModalOpen(false);
+            setUseIntelligentImport(false);
+        } else {
+            toast.error('导入失败，请检查股票代码');
         }
     };
 
@@ -302,76 +339,109 @@ const StockManagementPage: React.FC = () => {
             {/* Add Modal */}
             {isAddModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-                    <div className="bg-[#1e293b] rounded-lg border border-white/10 shadow-xl w-full max-w-md p-6 animate-fade-in relative">
+                    <div className="bg-[#1e293b] rounded-lg border border-white/10 shadow-xl w-full max-w-2xl p-6 animate-fade-in relative max-h-[90vh] overflow-y-auto">
                         <h2 className="text-xl font-bold text-white mb-4">添加自选股</h2>
                         <IconButton
                             variant="ghost"
                             size="sm"
-                            onClick={() => setIsAddModalOpen(false)}
+                            onClick={() => {
+                                setIsAddModalOpen(false);
+                                setUseIntelligentImport(false);
+                            }}
                             className="absolute top-4 right-4"
                             title="关闭"
                         >
                             ✕
                         </IconButton>
 
-                        <form onSubmit={handleAddStock} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">股票代码</label>
-                                <input
-                                    type="text"
-                                    value={newStockCode}
-                                    onChange={(e) => setNewStockCode(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50"
-                                    placeholder="例如: 600519"
-                                    autoFocus
-                                    disabled={isSubmitting}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">标签 (可选)</label>
-                                <input
-                                    type="text"
-                                    value={newStockTags}
-                                    onChange={(e) => setNewStockTags(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50"
-                                    placeholder="空格或逗号分隔，如: 白酒 龙头"
-                                    disabled={isSubmitting}
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-400 mb-1">备注 (可选)</label>
-                                <textarea
-                                    value={newStockRemark}
-                                    onChange={(e) => setNewStockRemark(e.target.value)}
-                                    className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none h-20 resize-none disabled:opacity-50"
-                                    placeholder="写点什么..."
-                                    disabled={isSubmitting}
-                                />
-                            </div>
+                        {/* Mode Toggle */}
+                        <div className="flex gap-2 mb-4">
+                            <button
+                                type="button"
+                                className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
+                                    !useIntelligentImport
+                                        ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-400'
+                                        : 'bg-slate-800/50 border-slate-700 text-gray-400 hover:border-slate-600'
+                                }`}
+                                onClick={() => setUseIntelligentImport(false)}
+                            >
+                                手动添加
+                            </button>
+                            <button
+                                type="button"
+                                className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
+                                    useIntelligentImport
+                                        ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-400'
+                                        : 'bg-slate-800/50 border-slate-700 text-gray-400 hover:border-slate-600'
+                                }`}
+                                onClick={() => setUseIntelligentImport(true)}
+                            >
+                                智能导入
+                            </button>
+                        </div>
 
-                            {formError && (
-                                <div className="text-red-400 text-sm bg-red-400/10 px-3 py-2 rounded">
-                                    {formError}
+                        {useIntelligentImport ? (
+                            <IntelligentImport onImportComplete={handleIntelligentImport} />
+                        ) : (
+                            <form onSubmit={handleAddStock} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400 mb-1">股票代码</label>
+                                    <input
+                                        type="text"
+                                        value={newStockCode}
+                                        onChange={(e) => setNewStockCode(e.target.value)}
+                                        className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                                        placeholder="例如: 600519"
+                                        autoFocus
+                                        disabled={isSubmitting}
+                                    />
                                 </div>
-                            )}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400 mb-1">标签 (可选)</label>
+                                    <input
+                                        type="text"
+                                        value={newStockTags}
+                                        onChange={(e) => setNewStockTags(e.target.value)}
+                                        className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                                        placeholder="空格或逗号分隔，如: 白酒 龙头"
+                                        disabled={isSubmitting}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400 mb-1">备注 (可选)</label>
+                                    <textarea
+                                        value={newStockRemark}
+                                        onChange={(e) => setNewStockRemark(e.target.value)}
+                                        className="w-full bg-black/20 border border-white/10 rounded px-3 py-2 text-white placeholder-gray-600 focus:border-blue-500 focus:outline-none h-20 resize-none disabled:opacity-50"
+                                        placeholder="写点什么..."
+                                        disabled={isSubmitting}
+                                    />
+                                </div>
 
-                            <div className="flex justify-end gap-3 mt-6">
-                                <Button
-                                    variant="secondary"
-                                    onClick={() => setIsAddModalOpen(false)}
-                                    disabled={isSubmitting}
-                                >
-                                    取消
-                                </Button>
-                                <Button
-                                    type="submit"
-                                    variant="primary"
-                                    isLoading={isSubmitting}
-                                >
-                                    {isSubmitting ? '处理中...' : '确认添加'}
-                                </Button>
-                            </div>
-                        </form>
+                                {formError && (
+                                    <div className="text-red-400 text-sm bg-red-400/10 px-3 py-2 rounded">
+                                        {formError}
+                                    </div>
+                                )}
+
+                                <div className="flex justify-end gap-3 mt-6">
+                                    <Button
+                                        variant="secondary"
+                                        onClick={() => setIsAddModalOpen(false)}
+                                        disabled={isSubmitting}
+                                    >
+                                        取消
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        variant="primary"
+                                        isLoading={isSubmitting}
+                                    >
+                                        {isSubmitting ? '处理中...' : '确认添加'}
+                                    </Button>
+                                </div>
+                            </form>
+                        )}
                     </div>
                 </div>
             )}

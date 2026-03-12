@@ -8,7 +8,7 @@
 | 计划名称 | 智能导入功能 |
 | 创建日期 | 2026-03-11 |
 | 优先级 | High |
-| 状态 | In Progress |
+| 状态 | Completed |
 | 负责人 | Claude Code + Peridot |
 
 ## 背景与目标
@@ -42,14 +42,14 @@
 - [x] 更新 `requirements.txt`
 - [x] 创建测试文件
 
-### 任务3：API 端点 ⬜ 待完成
-- [ ] `POST /api/v1/stocks/extract-from-image` - 图片识别
-- [ ] `POST /api/v1/stocks/parse-import` - 文件/文本解析
-- [ ] Schema 定义
+### 任务3：API 端点 ✅ 已完成
+- [x] `POST /api/v1/stocks/extract-from-image` - 图片识别
+- [x] `POST /api/v1/stocks/parse-import` - 文件/文本解析
+- [x] Schema 定义 (StockImportItem, ImageExtractRequest/Response, ParseImportRequest/Response)
 
-### 任务4：前端组件 ⬜ 待完成
-- [ ] `IntelligentImport.tsx` - 智能导入组件
-- [ ] 集成到设置页面
+### 任务4：前端组件 ✅ 已完成
+- [x] `IntelligentImport.tsx` - 智能导入组件
+- [x] 集成到设置页面
 
 ## 技术方案
 
