@@ -23,7 +23,8 @@ from src.config import get_config, Config
 from src.storage import get_db
 from data_provider import DataFetcherManager
 from data_provider.realtime_types import ChipDistribution
-from src.analyzer import GeminiAnalyzer, AnalysisResult, STOCK_NAME_MAP
+<<<<<<< HEAD
+from src.analyzer import GeminiAnalyzer, AnalysisResult, STOCK_NAME_MAP, fill_chip_structure_if_needed
 from src.notification import NotificationService, NotificationChannel
 from src.search_service import SearchService
 from src.enums import ReportType
@@ -308,6 +309,10 @@ class StockAnalysisPipeline:
                 result.current_price = realtime_data.get('price')
                 result.change_pct = realtime_data.get('change_pct')
 
+            # Step 7.6: chip_structure fallback (Issue #589)
+            if result and chip_data:
+                fill_chip_structure_if_needed(result, chip_data)
+
             # Step 8: 保存分析历史记录
             if result:
                 try:
@@ -415,6 +420,182 @@ class StockAnalysisPipeline:
             }
         
         return enhanced
+<<<<<<< HEAD
+=======
+
+    def _analyze_with_agent(
+        self, 
+        code: str, 
+        report_type: ReportType, 
+        query_id: str,
+        stock_name: str,
+        realtime_quote: Any,
+        chip_data: Optional[ChipDistribution]
+    ) -> Optional[AnalysisResult]:
+        """
+        使用 Agent 模式分析单只股票。
+        """
+        try:
+            from src.agent.factory import build_agent_executor
+
+            # Build executor from shared factory (ToolRegistry and SkillManager prototype are cached)
+            executor = build_agent_executor(self.config, getattr(self.config, 'agent_skills', None) or None)
+
+            # Build initial context to avoid redundant tool calls
+            initial_context = {
+                "stock_code": code,
+                "stock_name": stock_name,
+                "report_type": report_type.value,
+            }
+            
+            if realtime_quote:
+                initial_context["realtime_quote"] = self._safe_to_dict(realtime_quote)
+            if chip_data:
+                initial_context["chip_distribution"] = self._safe_to_dict(chip_data)
+
+            # 运行 Agent
+            message = f"请分析股票 {code} ({stock_name})，并生成决策仪表盘报告。"
+            agent_result = executor.run(message, context=initial_context)
+
+            # 转换为 AnalysisResult
+            result = self._agent_result_to_analysis_result(agent_result, code, stock_name, report_type, query_id)
+            if result:
+                result.query_id = query_id
+            # Agent weak integrity: placeholder fill only, no LLM retry
+            if result and getattr(self.config, "report_integrity_enabled", False):
+                from src.analyzer import check_content_integrity, apply_placeholder_fill
+
+                pass_integrity, missing = check_content_integrity(result)
+                if not pass_integrity:
+                    apply_placeholder_fill(result, missing)
+                    logger.info(
+                        "[LLM完整性] integrity_mode=agent_weak 必填字段缺失 %s，已占位补全",
+                        missing,
+                    )
+            # chip_structure fallback (Issue #589), before save_analysis_history
+            if result and chip_data:
+                fill_chip_structure_if_needed(result, chip_data)
+
+            resolved_stock_name = result.name if result and result.name else stock_name
+
+            # 保存新闻情报到数据库（Agent 工具结果仅用于 LLM 上下文，未持久化，Fixes #396）
+            # 使用 search_stock_news（与 Agent 工具调用逻辑一致），仅 1 次 API 调用，无额外延迟
+            if self.search_service.is_available:
+                try:
+                    news_response = self.search_service.search_stock_news(
+                        stock_code=code,
+                        stock_name=resolved_stock_name,
+                        max_results=5
+                    )
+                    if news_response.success and news_response.results:
+                        query_context = self._build_query_context(query_id=query_id)
+                        self.db.save_news_intel(
+                            code=code,
+                            name=resolved_stock_name,
+                            dimension="latest_news",
+                            query=news_response.query,
+                            response=news_response,
+                            query_context=query_context
+                        )
+                        logger.info(f"[{code}] Agent 模式: 新闻情报已保存 {len(news_response.results)} 条")
+                except Exception as e:
+                    logger.warning(f"[{code}] Agent 模式保存新闻情报失败: {e}")
+
+            # 保存分析历史记录
+            if result:
+                try:
+                    initial_context["stock_name"] = resolved_stock_name
+                    self.db.save_analysis_history(
+                        result=result,
+                        query_id=query_id,
+                        report_type=report_type.value,
+                        news_content=None,
+                        context_snapshot=initial_context,
+                        save_snapshot=self.save_context_snapshot
+                    )
+                except Exception as e:
+                    logger.warning(f"[{code}] 保存 Agent 分析历史失败: {e}")
+
+            return result
+
+        except Exception as e:
+            logger.error(f"[{code}] Agent 分析失败: {e}")
+            logger.exception(f"[{code}] Agent 详细错误信息:")
+            return None
+
+    def _agent_result_to_analysis_result(
+        self, agent_result, code: str, stock_name: str, report_type: ReportType, query_id: str
+    ) -> AnalysisResult:
+        """
+        将 AgentResult 转换为 AnalysisResult。
+        """
+        result = AnalysisResult(
+            code=code,
+            name=stock_name,
+            sentiment_score=50,
+            trend_prediction="未知",
+            operation_advice="观望",
+            success=agent_result.success,
+            error_message=agent_result.error if not agent_result.success else None,
+            data_sources=f"agent:{agent_result.provider}",
+            model_used=agent_result.model or None,
+        )
+
+        if agent_result.success and agent_result.dashboard:
+            dash = agent_result.dashboard
+            ai_stock_name = str(dash.get("stock_name", "")).strip()
+            if ai_stock_name and self._is_placeholder_stock_name(stock_name, code):
+                result.name = ai_stock_name
+            result.sentiment_score = self._safe_int(dash.get("sentiment_score"), 50)
+            result.trend_prediction = dash.get("trend_prediction", "未知")
+            result.operation_advice = dash.get("operation_advice", "观望")
+            result.decision_type = dash.get("decision_type", "hold")
+            result.analysis_summary = dash.get("analysis_summary", "")
+            # The AI returns a top-level dict that contains a nested 'dashboard' sub-key
+            # with core_conclusion / battle_plan / intelligence.  AnalysisResult's helper
+            # methods (get_sniper_points, get_core_conclusion, etc.) expect that inner
+            # structure, so we unwrap it here.
+            result.dashboard = dash.get("dashboard") or dash
+        else:
+            result.sentiment_score = 50
+            result.operation_advice = "观望"
+            if not result.error_message:
+                result.error_message = "Agent 未能生成有效的决策仪表盘"
+
+        return result
+
+    @staticmethod
+    def _is_placeholder_stock_name(name: str, code: str) -> bool:
+        """Return True when the stock name is missing or placeholder-like."""
+        if not name:
+            return True
+        normalized = str(name).strip()
+        if not normalized:
+            return True
+        if normalized == code:
+            return True
+        if normalized.startswith("股票"):
+            return True
+        if "Unknown" in normalized:
+            return True
+        return False
+
+    @staticmethod
+    def _safe_int(value: Any, default: int = 50) -> int:
+        """安全地将值转换为整数。"""
+        if value is None:
+            return default
+        if isinstance(value, int):
+            return value
+        if isinstance(value, float):
+            return int(value)
+        if isinstance(value, str):
+            import re
+            match = re.search(r'-?\d+', value)
+            if match:
+                return int(match.group())
+        return default
+>>>>>>> 7483b73 (fix(chip): fill chip_structure from data when LLM omits it (Fixes #589) (#598))
     
     def _describe_volume_ratio(self, volume_ratio: float) -> str:
         """
