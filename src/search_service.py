@@ -16,7 +16,7 @@ import random
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from itertools import cycle
 import requests
@@ -871,6 +871,245 @@ class BraveSearchProvider(BaseSearchProvider):
             return '未知来源'
 
 
+class MiniMaxSearchProvider(BaseSearchProvider):
+    """
+    MiniMax 搜索引擎
+
+    特点：
+    - 国产大模型公司提供的搜索能力
+    - 支持中文搜索优化
+    - 编程规划场景专用搜索接口
+
+    文档：https://platform.minimaxi.com/
+    """
+
+    API_ENDPOINT = "https://api.minimaxi.com/v1/coding_plan/search"
+
+    def __init__(self, api_keys: List[str]):
+        super().__init__(api_keys, "MiniMax")
+        # 熔断器：3次连续失败 -> 300秒冷却
+        self._failure_count = 0
+        self._last_failure_time = 0
+        self._circuit_breaker_threshold = 3
+        self._circuit_breaker_cooldown = 300  # 5分钟
+
+    @property
+    def is_available(self) -> bool:
+        """检查提供者是否可用（考虑熔断器状态）"""
+        if not self.api_keys:
+            return False
+        # 检查熔断器
+        if self._failure_count >= self._circuit_breaker_threshold:
+            elapsed = time.time() - self._last_failure_time
+            if elapsed < self._circuit_breaker_cooldown:
+                remaining = int(self._circuit_breaker_cooldown - elapsed)
+                logger.debug(f"[MiniMax] 熔断器激活，剩余 {remaining} 秒")
+                return False
+            else:
+                # 冷却结束，重置熔断器
+                logger.info("[MiniMax] 熔断器冷却结束，重置失败计数")
+                self._failure_count = 0
+        return True
+
+    def _record_failure(self):
+        """记录失败，用于熔断器"""
+        self._failure_count += 1
+        self._last_failure_time = time.time()
+        logger.warning(f"[MiniMax] 记录失败 {self._failure_count}/{self._circuit_breaker_threshold}")
+
+    def _record_success(self):
+        """记录成功，重置熔断器"""
+        if self._failure_count > 0:
+            self._failure_count = 0
+            logger.info("[MiniMax] 请求成功，重置失败计数")
+
+    def _enhance_query_with_time(self, query: str, days: int) -> str:
+        """
+        查询增强：添加时间相关关键词
+
+        策略：
+        - 1天内：添加"今天"、"最新"
+        - 7天内：添加"最近"、"本周"
+        - 30天内：添加"本月"、"近期"
+        """
+        if days <= 1:
+            time_keywords = ["今天", "最新", "今日"]
+        elif days <= 7:
+            time_keywords = ["最近", "本周", "近期"]
+        elif days <= 30:
+            time_keywords = ["本月", "近期", "最近一个月"]
+        else:
+            time_keywords = ["近期"]
+
+        # 随机选择一个时间关键词加入查询
+        import random
+        time_kw = random.choice(time_keywords)
+        return f"{query} {time_kw}"
+
+    def _do_search(self, query: str, api_key: str, max_results: int, days: int = 7) -> SearchResponse:
+        """执行 MiniMax 搜索"""
+        try:
+            # 查询增强：添加时间关键词
+            enhanced_query = self._enhance_query_with_time(query, days)
+
+            # 请求头
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json'
+            }
+
+            # 请求参数
+            payload = {
+                "query": enhanced_query,
+                "max_results": min(max_results, 20)  # 限制最大结果数
+            }
+
+            # 执行搜索
+            response = requests.post(
+                self.API_ENDPOINT,
+                headers=headers,
+                json=payload,
+                timeout=10
+            )
+
+            # 检查HTTP状态码
+            if response.status_code != 200:
+                error_msg = self._parse_error(response)
+                logger.warning(f"[MiniMax] 搜索失败: {error_msg}")
+                self._record_failure()
+                return SearchResponse(
+                    query=query,
+                    results=[],
+                    provider=self.name,
+                    success=False,
+                    error_message=error_msg
+                )
+
+            # 解析响应
+            try:
+                data = response.json()
+            except ValueError as e:
+                error_msg = f"响应JSON解析失败: {str(e)}"
+                logger.error(f"[MiniMax] {error_msg}")
+                self._record_failure()
+                return SearchResponse(
+                    query=query,
+                    results=[],
+                    provider=self.name,
+                    success=False,
+                    error_message=error_msg
+                )
+
+            # 记录成功
+            self._record_success()
+
+            logger.info(f"[MiniMax] 搜索完成，query='{query}'")
+            logger.debug(f"[MiniMax] 原始响应: {data}")
+
+            # 解析搜索结果
+            results = []
+            search_results = data.get('data', {}).get('results', [])
+
+            for item in search_results[:max_results]:
+                # 解析发布日期
+                published_date = None
+                date_str = item.get('publish_date') or item.get('date')
+                if date_str:
+                    try:
+                        # 尝试解析日期
+                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+                        published_date = dt.strftime('%Y-%m-%d')
+                    except (ValueError, AttributeError):
+                        published_date = date_str
+
+                # 客户端日期过滤：如果结果超出时间范围则跳过
+                if published_date and days > 0:
+                    try:
+                        result_date = datetime.strptime(published_date, '%Y-%m-%d')
+                        cutoff_date = datetime.now() - timedelta(days=days)
+                        if result_date < cutoff_date:
+                            logger.debug(f"[MiniMax] 跳过过期结果: {item.get('title', '')[:30]}... ({published_date})")
+                            continue
+                    except (ValueError, TypeError):
+                        pass  # 日期解析失败，不过滤
+
+                results.append(SearchResult(
+                    title=item.get('title', ''),
+                    snippet=item.get('snippet', '')[:500],
+                    url=item.get('url', ''),
+                    source=item.get('source') or self._extract_domain(item.get('url', '')),
+                    published_date=published_date
+                ))
+
+            logger.info(f"[MiniMax] 成功解析 {len(results)} 条结果")
+
+            return SearchResponse(
+                query=query,
+                results=results,
+                provider=self.name,
+                success=True
+            )
+
+        except requests.exceptions.Timeout:
+            error_msg = "请求超时"
+            logger.error(f"[MiniMax] {error_msg}")
+            self._record_failure()
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+        except requests.exceptions.RequestException as e:
+            error_msg = f"网络请求失败: {str(e)}"
+            logger.error(f"[MiniMax] {error_msg}")
+            self._record_failure()
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+        except Exception as e:
+            error_msg = f"未知错误: {str(e)}"
+            logger.error(f"[MiniMax] {error_msg}")
+            self._record_failure()
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=error_msg
+            )
+
+    def _parse_error(self, response) -> str:
+        """解析错误响应"""
+        try:
+            if response.headers.get('content-type', '').startswith('application/json'):
+                error_data = response.json()
+                if 'message' in error_data:
+                    return error_data['message']
+                if 'error' in error_data:
+                    return str(error_data['error'])
+                return str(error_data)
+            return response.text[:200]
+        except:
+            return f"HTTP {response.status_code}: {response.text[:200]}"
+
+    @staticmethod
+    def _extract_domain(url: str) -> str:
+        """从 URL 提取域名作为来源"""
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(url)
+            domain = parsed.netloc.replace('www.', '')
+            return domain or '未知来源'
+        except:
+            return '未知来源'
+
+
 class SearchService:
     """
     搜索服务
@@ -907,6 +1146,7 @@ class SearchService:
         tavily_keys: Optional[List[str]] = None,
         brave_keys: Optional[List[str]] = None,
         serpapi_keys: Optional[List[str]] = None,
+        minimax_keys: Optional[List[str]] = None,
     ):
         """
         初始化搜索服务
@@ -916,6 +1156,7 @@ class SearchService:
             tavily_keys: Tavily API Key 列表
             brave_keys: Brave Search API Key 列表
             serpapi_keys: SerpAPI Key 列表
+            minimax_keys: MiniMax API Key 列表
         """
         self._providers: List[BaseSearchProvider] = []
 
@@ -939,7 +1180,12 @@ class SearchService:
         if serpapi_keys:
             self._providers.append(SerpAPISearchProvider(serpapi_keys))
             logger.info(f"已配置 SerpAPI 搜索，共 {len(serpapi_keys)} 个 API Key")
-        
+
+        # 5. MiniMax 作为最后备选（国产搜索）
+        if minimax_keys:
+            self._providers.append(MiniMaxSearchProvider(minimax_keys))
+            logger.info(f"已配置 MiniMax 搜索，共 {len(minimax_keys)} 个 API Key")
+
         if not self._providers:
             logger.warning("未配置任何搜索引擎 API Key，新闻搜索功能将不可用")
 
@@ -1516,6 +1762,7 @@ def get_search_service() -> SearchService:
             tavily_keys=config.tavily_api_keys,
             brave_keys=config.brave_api_keys,
             serpapi_keys=config.serpapi_keys,
+            minimax_keys=config.minimax_api_keys,
         )
     
     return _search_service

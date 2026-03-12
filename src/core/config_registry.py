@@ -148,6 +148,20 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {"multi_value": True, "delimiter": ","},
         "display_order": 50,
     },
+    "MINIMAX_API_KEYS": {
+        "title": "MiniMax API Keys",
+        "description": "Comma-separated MiniMax API keys for search.",
+        "category": "data_source",
+        "data_type": "string",
+        "ui_control": "password",
+        "is_sensitive": True,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": None,
+        "options": [],
+        "validation": {"multi_value": True, "delimiter": ","},
+        "display_order": 55,
+    },
     "GEMINI_API_KEY": {
         "title": "Gemini API Key",
         "description": "API key for Gemini service.",
@@ -571,6 +585,7 @@ def _infer_category(key: str) -> str:
             "TAVILY",
             "SERPAPI",
             "BRAVE",
+            "MINIMAX",
         )
     ):
         return "data_source"
