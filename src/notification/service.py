@@ -104,7 +104,9 @@ class NotificationService:
 
         # PushPlus 配置
         self._pushplus_token = getattr(config, 'pushplus_token', None)
-       
+        self._pushplus_topic = getattr(config, 'pushplus_topic', None)
+        self._pushplus_max_bytes = getattr(config, 'pushplus_max_bytes', 20000)
+
         # Server酱3 配置
         self._serverchan3_sendkey = getattr(config, 'serverchan3_sendkey', None)
 
@@ -2815,6 +2817,7 @@ class NotificationService:
         - 国内推送服务，免费额度充足
         - 支持微信公众号推送
         - 支持多种消息格式
+        - 超长消息自动分块发送
 
         Args:
             content: 消息内容（Markdown 格式）
@@ -2827,7 +2830,6 @@ class NotificationService:
             logger.warning("PushPlus Token 未配置，跳过推送")
             return False
 
-        # PushPlus API 端点
         api_url = "http://www.pushplus.plus/send"
 
         # 处理消息标题
@@ -2836,31 +2838,111 @@ class NotificationService:
             title = f"📈 股票分析报告 - {date_str}"
 
         try:
-            payload = {
-                "token": self._pushplus_token,
-                "title": title,
-                "content": content,
-                "template": "markdown"  # 使用 Markdown 格式
-            }
+            content_bytes = len(content.encode('utf-8'))
+            if content_bytes > self._pushplus_max_bytes:
+                logger.info(
+                    "PushPlus 消息内容超长(%s字节/%s字符)，将分批发送",
+                    content_bytes,
+                    len(content),
+                )
+                return self._send_pushplus_chunked(api_url, content, title, self._pushplus_max_bytes)
 
-            response = requests.post(api_url, json=payload, timeout=10)
-
-            if response.status_code == 200:
-                result = response.json()
-                if result.get('code') == 200:
-                    logger.info("PushPlus 消息发送成功")
-                    return True
-                else:
-                    error_msg = result.get('msg', '未知错误')
-                    logger.error(f"PushPlus 返回错误: {error_msg}")
-                    return False
-            else:
-                logger.error(f"PushPlus 请求失败: HTTP {response.status_code}")
-                return False
-
+            return self._send_pushplus_message(api_url, content, title)
         except Exception as e:
             logger.error(f"发送 PushPlus 消息失败: {e}")
             return False
+
+    def _send_pushplus_message(self, api_url: str, content: str, title: str) -> bool:
+        """
+        发送单条 PushPlus 消息
+
+        Args:
+            api_url: PushPlus API 端点
+            content: 消息内容
+            title: 消息标题
+
+        Returns:
+            是否发送成功
+        """
+        payload = {
+            "token": self._pushplus_token,
+            "title": title,
+            "content": content,
+            "template": "markdown",
+        }
+        # 群组推送（配置了 PUSHPLUS_TOPIC 时推给群组所有人）
+        if self._pushplus_topic:
+            payload["topic"] = self._pushplus_topic
+
+        response = requests.post(api_url, json=payload, timeout=10)
+
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("code") == 200:
+                logger.info("PushPlus 消息发送成功")
+                return True
+            logger.error(f"PushPlus 返回错误: {result.get('msg', '未知错误')}")
+            return False
+        logger.error(f"PushPlus 请求失败: HTTP {response.status_code}")
+        return False
+
+    def _send_pushplus_chunked(self, api_url: str, content: str, title: str, max_bytes: int) -> bool:
+        """
+        分块发送超长的 PushPlus 消息
+
+        Args:
+            api_url: PushPlus API 端点
+            content: 消息内容
+            title: 消息标题
+            max_bytes: 单条消息最大字节数
+
+        Returns:
+            是否全部发送成功
+        """
+        # 按段落分割，尽量保持内容完整性
+        sections = content.split("\n\n")
+        chunks: List[str] = []
+        current: List[str] = []
+        current_bytes = 0
+
+        for section in sections:
+            s_bytes = len(section.encode("utf-8")) + 2  # 加上两个换行符
+            if s_bytes > max_bytes:
+                # 单个段落超长，强制截断
+                head = section[: max(0, max_bytes // 2)]
+                tail = section[-max(0, max_bytes // 2) :]
+                forced = head + "\n\n...\n\n" + tail
+                if current:
+                    chunks.append("\n\n".join(current))
+                    current = []
+                    current_bytes = 0
+                chunks.append(forced)
+                continue
+
+            if current_bytes + s_bytes > max_bytes:
+                # 当前块已满，开始新块
+                chunks.append("\n\n".join(current))
+                current = [section]
+                current_bytes = s_bytes
+            else:
+                current.append(section)
+                current_bytes += s_bytes
+
+        if current:
+            chunks.append("\n\n".join(current))
+
+        total = len(chunks)
+        ok_all = True
+        for i, chunk in enumerate(chunks, 1):
+            # 分块标题加上页码
+            page_title = title if total == 1 else f"{title} ({i}/{total})"
+            ok = self._send_pushplus_message(api_url, chunk, page_title)
+            ok_all = ok_all and ok
+            # 避免触发限流，分批发送时稍作延迟
+            if i < total:
+                time.sleep(0.5)
+
+        return ok_all
 
     def send_to_serverchan3(self, content: str, title: Optional[str] = None) -> bool:
         """
