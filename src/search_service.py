@@ -21,8 +21,34 @@ from typing import List, Dict, Any, Optional, Tuple
 from itertools import cycle
 import requests
 from newspaper import Article, Config
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+    before_sleep_log,
+)
 
 logger = logging.getLogger(__name__)
+
+# Transient network errors (retryable)
+_SEARCH_TRANSIENT_EXCEPTIONS = (
+    requests.exceptions.SSLError,
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+)
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    retry=retry_if_exception_type(_SEARCH_TRANSIENT_EXCEPTIONS),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
+)
+def _post_with_retry(url: str, *, headers: Dict[str, str], json: Dict[str, Any], timeout: int) -> requests.Response:
+    """POST with retry on transient SSL/network errors."""
+    return requests.post(url, headers=headers, json=json, timeout=timeout)
 
 
 def fetch_url_content(url: str, timeout: int = 5) -> str:
@@ -873,240 +899,235 @@ class BraveSearchProvider(BaseSearchProvider):
 
 class MiniMaxSearchProvider(BaseSearchProvider):
     """
-    MiniMax 搜索引擎
+    MiniMax Web Search (Coding Plan API)
 
-    特点：
-    - 国产大模型公司提供的搜索能力
-    - 支持中文搜索优化
-    - 编程规划场景专用搜索接口
+    Features:
+    - Backed by MiniMax Coding Plan subscription
+    - Returns structured organic results with title/link/snippet/date
+    - No native time-range parameter; time filtering is done via query
+      augmentation and client-side date filtering
+    - Circuit-breaker protection: 3 consecutive failures -> 300s cooldown
 
-    文档：https://platform.minimaxi.com/
+    API endpoint: POST https://api.minimaxi.com/v1/coding_plan/search
     """
 
     API_ENDPOINT = "https://api.minimaxi.com/v1/coding_plan/search"
 
+    # Circuit-breaker settings
+    _CB_FAILURE_THRESHOLD = 3
+    _CB_COOLDOWN_SECONDS = 300  # 5 minutes
+
     def __init__(self, api_keys: List[str]):
         super().__init__(api_keys, "MiniMax")
-        # 熔断器：3次连续失败 -> 300秒冷却
-        self._failure_count = 0
-        self._last_failure_time = 0
-        self._circuit_breaker_threshold = 3
-        self._circuit_breaker_cooldown = 300  # 5分钟
+        # Circuit breaker state
+        self._consecutive_failures = 0
+        self._circuit_open_until: float = 0.0
 
     @property
     def is_available(self) -> bool:
-        """检查提供者是否可用（考虑熔断器状态）"""
-        if not self.api_keys:
+        """Check availability considering circuit breaker state."""
+        if not super().is_available:
             return False
-        # 检查熔断器
-        if self._failure_count >= self._circuit_breaker_threshold:
-            elapsed = time.time() - self._last_failure_time
-            if elapsed < self._circuit_breaker_cooldown:
-                remaining = int(self._circuit_breaker_cooldown - elapsed)
-                logger.debug(f"[MiniMax] 熔断器激活，剩余 {remaining} 秒")
+        if self._consecutive_failures >= self._CB_FAILURE_THRESHOLD:
+            if time.time() < self._circuit_open_until:
                 return False
-            else:
-                # 冷却结束，重置熔断器
-                logger.info("[MiniMax] 熔断器冷却结束，重置失败计数")
-                self._failure_count = 0
+            # Cooldown expired -> half-open, allow one probe
         return True
 
-    def _record_failure(self):
-        """记录失败，用于熔断器"""
-        self._failure_count += 1
-        self._last_failure_time = time.time()
-        logger.warning(f"[MiniMax] 记录失败 {self._failure_count}/{self._circuit_breaker_threshold}")
+    def _record_success(self, key: str) -> None:
+        super()._record_success(key)
+        # Reset circuit breaker on success
+        self._consecutive_failures = 0
+        self._circuit_open_until = 0.0
 
-    def _record_success(self):
-        """记录成功，重置熔断器"""
-        if self._failure_count > 0:
-            self._failure_count = 0
-            logger.info("[MiniMax] 请求成功，重置失败计数")
-
-    def _enhance_query_with_time(self, query: str, days: int) -> str:
-        """
-        查询增强：添加时间相关关键词
-
-        策略：
-        - 1天内：添加"今天"、"最新"
-        - 7天内：添加"最近"、"本周"
-        - 30天内：添加"本月"、"近期"
-        """
-        if days <= 1:
-            time_keywords = ["今天", "最新", "今日"]
-        elif days <= 7:
-            time_keywords = ["最近", "本周", "近期"]
-        elif days <= 30:
-            time_keywords = ["本月", "近期", "最近一个月"]
-        else:
-            time_keywords = ["近期"]
-
-        # 随机选择一个时间关键词加入查询
-        import random
-        time_kw = random.choice(time_keywords)
-        return f"{query} {time_kw}"
-
-    def _do_search(self, query: str, api_key: str, max_results: int, days: int = 7) -> SearchResponse:
-        """执行 MiniMax 搜索"""
-        try:
-            # 查询增强：添加时间关键词
-            enhanced_query = self._enhance_query_with_time(query, days)
-
-            # 请求头
-            headers = {
-                'Authorization': f'Bearer {api_key}',
-                'Content-Type': 'application/json'
-            }
-
-            # 请求参数
-            payload = {
-                "query": enhanced_query,
-                "max_results": min(max_results, 20)  # 限制最大结果数
-            }
-
-            # 执行搜索
-            response = requests.post(
-                self.API_ENDPOINT,
-                headers=headers,
-                json=payload,
-                timeout=10
+    def _record_error(self, key: str) -> None:
+        super()._record_error(key)
+        self._consecutive_failures += 1
+        if self._consecutive_failures >= self._CB_FAILURE_THRESHOLD:
+            self._circuit_open_until = time.time() + self._CB_COOLDOWN_SECONDS
+            logger.warning(
+                f"[MiniMax] Circuit breaker OPEN – "
+                f"{self._consecutive_failures} consecutive failures, "
+                f"cooldown {self._CB_COOLDOWN_SECONDS}s"
             )
 
-            # 检查HTTP状态码
+    # ------------------------------------------------------------------
+    # Time-range helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _time_hint(days: int, is_chinese: bool = True) -> str:
+        """Build a time-hint string to append to the search query."""
+        if is_chinese:
+            if days <= 1:
+                return "今天"
+            elif days <= 3:
+                return "最近三天"
+            elif days <= 7:
+                return "最近一周"
+            else:
+                return "最近一个月"
+        else:
+            if days <= 1:
+                return "today"
+            elif days <= 3:
+                return "past 3 days"
+            elif days <= 7:
+                return "past week"
+            else:
+                return "past month"
+
+    @staticmethod
+    def _is_within_days(date_str: Optional[str], days: int) -> bool:
+        """Check whether *date_str* falls within the last *days* days.
+
+        Accepts common formats: ``2025-06-01``, ``2025/06/01``,
+        ``Jun 1, 2025``, ISO-8601 with timezone, etc.
+        Returns True when date_str is None or unparseable (keep the result).
+        """
+        if not date_str:
+            return True
+        try:
+            from dateutil import parser as dateutil_parser
+            dt = dateutil_parser.parse(date_str, fuzzy=True)
+            from datetime import timedelta, timezone
+            now = datetime.now(timezone.utc) if dt.tzinfo else datetime.now()
+            return (now - dt) <= timedelta(days=days + 1)  # +1 buffer
+        except Exception:
+            return True  # Keep result when date is unparseable
+
+    # ------------------------------------------------------------------
+
+    def _do_search(self, query: str, api_key: str, max_results: int, days: int = 7) -> SearchResponse:
+        """Execute MiniMax web search."""
+        try:
+            # Detect language hint from query (simple heuristic)
+            has_cjk = any('\u4e00' <= ch <= '\u9fff' for ch in query)
+            time_hint = self._time_hint(days, is_chinese=has_cjk)
+            augmented_query = f"{query} {time_hint}"
+
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Content-Type': 'application/json',
+                'MM-API-Source': 'Minimax-MCP',
+            }
+            payload = {"q": augmented_query}
+
+            response = _post_with_retry(
+                self.API_ENDPOINT, headers=headers, json=payload, timeout=15
+            )
+
+            # HTTP error handling
             if response.status_code != 200:
-                error_msg = self._parse_error(response)
-                logger.warning(f"[MiniMax] 搜索失败: {error_msg}")
-                self._record_failure()
+                error_msg = self._parse_http_error(response)
+                logger.warning(f"[MiniMax] Search failed: {error_msg}")
+                self._record_error(api_key)
                 return SearchResponse(
                     query=query,
                     results=[],
                     provider=self.name,
                     success=False,
-                    error_message=error_msg
+                    error_message=error_msg,
                 )
 
-            # 解析响应
-            try:
-                data = response.json()
-            except ValueError as e:
-                error_msg = f"响应JSON解析失败: {str(e)}"
-                logger.error(f"[MiniMax] {error_msg}")
-                self._record_failure()
+            data = response.json()
+
+            # Check base_resp status
+            base_resp = data.get('base_resp', {})
+            if base_resp.get('status_code', 0) != 0:
+                error_msg = base_resp.get('status_msg', 'Unknown API error')
+                self._record_error(api_key)
                 return SearchResponse(
                     query=query,
                     results=[],
                     provider=self.name,
                     success=False,
-                    error_message=error_msg
+                    error_message=error_msg,
                 )
 
-            # 记录成功
-            self._record_success()
+            logger.info(f"[MiniMax] Search done, query='{query}'")
+            logger.debug(f"[MiniMax] Raw response keys: {list(data.keys())}")
 
-            logger.info(f"[MiniMax] 搜索完成，query='{query}'")
-            logger.debug(f"[MiniMax] 原始响应: {data}")
+            # Parse organic results
+            results: List[SearchResult] = []
+            for item in data.get('organic', []):
+                date_val = item.get('date')
 
-            # 解析搜索结果
-            results = []
-            search_results = data.get('data', {}).get('results', [])
-
-            for item in search_results[:max_results]:
-                # 解析发布日期
-                published_date = None
-                date_str = item.get('publish_date') or item.get('date')
-                if date_str:
-                    try:
-                        # 尝试解析日期
-                        dt = datetime.fromisoformat(date_str.replace('Z', '+00:00'))
-                        published_date = dt.strftime('%Y-%m-%d')
-                    except (ValueError, AttributeError):
-                        published_date = date_str
-
-                # 客户端日期过滤：如果结果超出时间范围则跳过
-                if published_date and days > 0:
-                    try:
-                        result_date = datetime.strptime(published_date, '%Y-%m-%d')
-                        cutoff_date = datetime.now() - timedelta(days=days)
-                        if result_date < cutoff_date:
-                            logger.debug(f"[MiniMax] 跳过过期结果: {item.get('title', '')[:30]}... ({published_date})")
-                            continue
-                    except (ValueError, TypeError):
-                        pass  # 日期解析失败，不过滤
+                # Client-side time filtering
+                if not self._is_within_days(date_val, days):
+                    continue
 
                 results.append(SearchResult(
                     title=item.get('title', ''),
-                    snippet=item.get('snippet', '')[:500],
-                    url=item.get('url', ''),
-                    source=item.get('source') or self._extract_domain(item.get('url', '')),
-                    published_date=published_date
+                    snippet=(item.get('snippet', '') or '')[:500],
+                    url=item.get('link', ''),
+                    source=self._extract_domain(item.get('link', '')),
+                    published_date=date_val,
                 ))
 
-            logger.info(f"[MiniMax] 成功解析 {len(results)} 条结果")
+                if len(results) >= max_results:
+                    break
+
+            logger.info(f"[MiniMax] Parsed {len(results)} results (after time filter)")
+
+            # Record success on this key
+            self._record_success(api_key)
 
             return SearchResponse(
                 query=query,
                 results=results,
                 provider=self.name,
-                success=True
+                success=True,
             )
 
         except requests.exceptions.Timeout:
-            error_msg = "请求超时"
+            error_msg = "Request timeout"
             logger.error(f"[MiniMax] {error_msg}")
-            self._record_failure()
+            self._record_error(api_key)
             return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message=error_msg
+                query=query, results=[], provider=self.name,
+                success=False, error_message=error_msg,
             )
         except requests.exceptions.RequestException as e:
-            error_msg = f"网络请求失败: {str(e)}"
+            error_msg = f"Network error: {e}"
             logger.error(f"[MiniMax] {error_msg}")
-            self._record_failure()
+            self._record_error(api_key)
             return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message=error_msg
+                query=query, results=[], provider=self.name,
+                success=False, error_message=error_msg,
             )
         except Exception as e:
-            error_msg = f"未知错误: {str(e)}"
+            error_msg = f"Unexpected error: {e}"
             logger.error(f"[MiniMax] {error_msg}")
-            self._record_failure()
+            self._record_error(api_key)
             return SearchResponse(
-                query=query,
-                results=[],
-                provider=self.name,
-                success=False,
-                error_message=error_msg
+                query=query, results=[], provider=self.name,
+                success=False, error_message=error_msg,
             )
 
-    def _parse_error(self, response) -> str:
-        """解析错误响应"""
+    @staticmethod
+    def _parse_http_error(response) -> str:
+        """Parse HTTP error response from MiniMax API."""
         try:
-            if response.headers.get('content-type', '').startswith('application/json'):
-                error_data = response.json()
-                if 'message' in error_data:
-                    return error_data['message']
-                if 'error' in error_data:
-                    return str(error_data['error'])
-                return str(error_data)
+            ct = response.headers.get('content-type', '')
+            if 'json' in ct:
+                err = response.json()
+                base_resp = err.get('base_resp', {})
+                msg = base_resp.get('status_msg') or err.get('message') or str(err)
+                return msg
             return response.text[:200]
-        except:
+        except Exception:
             return f"HTTP {response.status_code}: {response.text[:200]}"
 
     @staticmethod
     def _extract_domain(url: str) -> str:
-        """从 URL 提取域名作为来源"""
+        """Extract domain from URL as source label."""
         try:
             from urllib.parse import urlparse
             parsed = urlparse(url)
             domain = parsed.netloc.replace('www.', '')
             return domain or '未知来源'
-        except:
+        except Exception:
             return '未知来源'
 
 
