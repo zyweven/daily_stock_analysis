@@ -24,6 +24,57 @@ from src.storage import persist_llm_usage
 logger = logging.getLogger(__name__)
 
 
+# ============================================================
+# DeepSeek Thinking Mode Support
+# ============================================================
+
+# Models that auto-return reasoning_content; do NOT send extra_body (may cause 400).
+_AUTO_THINKING_MODELS: List[str] = ["deepseek-reasoner", "deepseek-r1", "qwq"]
+
+# Models that need explicit opt-in via extra_body; payload decoupled from model name.
+_OPT_IN_THINKING_MODELS: Dict[str, dict] = {
+    "deepseek-chat": {"thinking": {"type": "enabled"}},
+}
+
+
+def _model_matches(model: str, entries: List[str]) -> bool:
+    """Check if model name matches any entry (exact or prefix with version suffix)."""
+    if not model:
+        return False
+    m = model.lower().strip()
+    for e in entries:
+        if m == e or m.startswith(e + "-"):
+            return True
+    return False
+
+
+def _get_opt_in_payload(model: str, opt_in: Dict[str, dict]) -> Optional[dict]:
+    """Return extra_body payload for opt-in thinking models, or None."""
+    if not model:
+        return None
+    m = model.lower().strip()
+    for key, payload in opt_in.items():
+        if m == key or m.startswith(key + "-"):
+            return payload
+    return None
+
+
+def get_thinking_extra_body(model: str) -> Optional[dict]:
+    """Return extra_body for thinking mode, or None.
+
+    - Auto-thinking models (_AUTO_THINKING_MODELS: deepseek-reasoner, deepseek-r1, qwq):
+      These models automatically return reasoning_content in API responses; sending
+      extra_body would cause 400 because the API already enables thinking by default.
+      Return None to avoid duplicate activation.
+    - Opt-in models (_OPT_IN_THINKING_MODELS: deepseek-chat): Return the activation
+      payload to explicitly enable thinking mode.
+    - All other models: Return None (no thinking mode).
+    """
+    if _model_matches(model, _AUTO_THINKING_MODELS):
+        return None
+    return _get_opt_in_payload(model, _OPT_IN_THINKING_MODELS)
+
+
 # 股票名称映射（常见股票）
 STOCK_NAME_MAP = {
     # === A股 ===
@@ -615,14 +666,19 @@ class GeminiAnalyzer:
         base_delay = config.gemini_retry_delay
 
         def _build_base_request_kwargs() -> dict:
+            # OpenAI-compatible path (DeepSeek, Qwen, etc.): add extra_body for thinking models
+            model_name = self._current_model_name
             kwargs = {
-                "model": self._current_model_name,
+                "model": model_name,
                 "messages": [
                     {"role": "system", "content": self.system_prompt},
                     {"role": "user", "content": prompt},
                 ],
                 "temperature": generation_config.get('temperature', config.openai_temperature),
             }
+            payload = get_thinking_extra_body(model_name)
+            if payload:
+                kwargs["extra_body"] = payload
             return kwargs
 
         def _is_unsupported_param_error(error_message: str, param_name: str) -> bool:
