@@ -815,6 +815,12 @@ class DatabaseManager:
     def _parse_sniper_value(value: Any) -> Optional[float]:
         """
         解析狙击点位数值
+
+        支持格式：
+        - 纯数字: "102.50"
+        - 带"元": "理想买点：102.10-103.00元"
+        - 无"元": "102.10-103.00（MA5附近）" (fallback)
+        - 避免 MA 数字: "MA5: 100.50" 不提取 100.50
         """
         if value is None:
             return None
@@ -831,30 +837,52 @@ class DatabaseManager:
         except ValueError:
             pass
 
-        # 优先截取 "：" 到 "元" 之间的价格，避免误提取 MA5/MA10 等技术指标数字
+        # 截断到第一个括号，避免提取括号内的 MA/M20 等数字
+        paren_pos = text.find('（')
+        if paren_pos == -1:
+            paren_pos = text.find('(')
+        if paren_pos > 0:
+            text = text[:paren_pos]
+
+        # 优先截取 "：" 到 "元" 之间的价格
         colon_pos = max(text.rfind("："), text.rfind(":"))
         yuan_pos = text.find("元", colon_pos + 1 if colon_pos != -1 else 0)
+
+        # 确定要解析的文本段
         if yuan_pos != -1:
             segment_start = colon_pos + 1 if colon_pos != -1 else 0
             segment = text[segment_start:yuan_pos]
-            
-            # 使用 finditer 并过滤掉 MA 开头的数字
-            matches = list(re.finditer(r"-?\d+(?:\.\d+)?", segment))
-            valid_numbers = []
-            for m in matches:
-                # 检查前面是否是 "MA" (忽略大小写)
-                start_idx = m.start()
-                if start_idx >= 2:
-                    prefix = segment[start_idx-2:start_idx].upper()
-                    if prefix == "MA":
-                        continue
-                valid_numbers.append(m.group())
-            
-            if valid_numbers:
-                try:
-                    return float(valid_numbers[-1])
-                except ValueError:
-                    pass
+        elif colon_pos != -1:
+            # 有冒号但无"元"，从冒号后开始
+            segment = text[colon_pos + 1:]
+        else:
+            # 无冒号无"元"，使用整个文本
+            segment = text
+
+        # 使用 finditer 提取数字，过滤掉 MA 开头的
+        matches = list(re.finditer(r"-?\d+(?:\.\d+)?", segment))
+        valid_numbers = []
+        for m in matches:
+            start_idx = m.start()
+            # 检查前面是否是 "MA" (忽略大小写)
+            if start_idx >= 2:
+                prefix = segment[start_idx-2:start_idx].upper()
+                if prefix == "MA":
+                    continue
+            # 也检查 M20 这种单字母 + 数字的情况
+            if start_idx >= 1:
+                char_before = segment[start_idx-1].upper()
+                if char_before == 'M' and m.group().startswith('20'):
+                    continue
+            valid_numbers.append(m.group())
+
+        if valid_numbers:
+            try:
+                # 取最后一个有效数字（通常是价格区间的终点）
+                return float(valid_numbers[-1])
+            except ValueError:
+                pass
+
         return None
 
     def _extract_sniper_points(self, result: Any) -> Dict[str, Optional[float]]:
