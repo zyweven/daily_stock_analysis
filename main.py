@@ -212,6 +212,10 @@ def run_full_analysis(
     这是定时任务调用的主函数
     """
     try:
+        # Issue #529: 热重载 STOCK_LIST（定时任务运行时从 .env 重新读取）
+        if stock_codes is None:
+            config.refresh_stock_list()
+
         # 命令行参数 --single-notify 覆盖配置（#55）
         if getattr(args, 'single_notify', False):
             config.single_stock_notify = True

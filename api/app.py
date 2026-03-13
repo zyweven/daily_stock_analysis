@@ -15,6 +15,7 @@ FastAPI 应用工厂模块
     app = create_app()
 """
 
+import mimetypes
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -175,7 +176,9 @@ def create_app(static_dir: Optional[Path] = None) -> FastAPI:
             
             file_path = static_dir / full_path
             if file_path.exists() and file_path.is_file():
-                return FileResponse(file_path)
+                # Issue #520: 显式解析 MIME 类型，避免浏览器拒绝 JS 模块
+                content_type, _ = mimetypes.guess_type(str(file_path))
+                return FileResponse(file_path, media_type=content_type)
             
             return FileResponse(static_dir / "index.html")
     
