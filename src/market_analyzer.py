@@ -20,6 +20,8 @@ import pandas as pd
 
 from src.config import get_config
 from src.search_service import SearchService
+from src.core.market_profile import get_profile, MarketProfile
+from src.core.market_strategy import get_market_strategy_blueprint
 from data_provider.base import DataFetcherManager
 
 logger = logging.getLogger(__name__)
@@ -87,18 +89,22 @@ class MarketAnalyzer:
     5. 生成大盘复盘报告
     """
     
-    def __init__(self, search_service: Optional[SearchService] = None, analyzer=None):
+    def __init__(self, search_service: Optional[SearchService] = None, analyzer=None, region: str = "cn"):
         """
         初始化大盘分析器
 
         Args:
             search_service: 搜索服务实例
             analyzer: AI分析器实例（用于调用LLM）
+            region: 市场区域，cn（A股）或 us（美股）
         """
         self.config = get_config()
         self.search_service = search_service
         self.analyzer = analyzer
         self.data_manager = DataFetcherManager()
+        self.region = region if region in ("cn", "us") else "cn"
+        self.profile: MarketProfile = get_profile(self.region)
+        self.strategy = get_market_strategy_blueprint(self.region)
 
     def get_market_overview(self) -> MarketOverview:
         """
@@ -462,6 +468,10 @@ class MarketAnalyzer:
 
 ---
 
+{self.strategy.to_prompt_block()}
+
+---
+
 # 输出格式模板（请严格按此格式输出）
 
 ## 📊 {overview.date} 大盘复盘
@@ -483,6 +493,9 @@ class MarketAnalyzer:
 
 ### 六、风险提示
 （需要关注的风险点）
+
+### 七、策略建议
+（根据策略蓝图，给出风险偏好判断、仓位建议和一个明确的失效触发条件）
 
 ---
 
@@ -541,6 +554,7 @@ class MarketAnalyzer:
 ### 五、风险提示
 市场有风险，投资需谨慎。以上数据仅供参考，不构成投资建议。
 
+{self.strategy.to_markdown_block()}
 ---
 *复盘时间: {datetime.now().strftime('%H:%M')}*
 """
