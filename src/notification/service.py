@@ -139,6 +139,9 @@ class NotificationService:
             config, 'markdown_to_image_max_chars', 15000
         )
 
+        # 仅分析结果摘要（Issue #262）：true 时只推送汇总，不含个股详情
+        self._report_summary_only = getattr(config, 'report_summary_only', False)
+
         # 检测所有已配置的渠道
         self._available_channels = self._detect_all_channels()
         if self._has_context_channel():

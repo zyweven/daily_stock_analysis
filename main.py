@@ -103,6 +103,12 @@ def parse_arguments() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        '--summary-only',
+        action='store_true',
+        help='仅推送分析结果摘要，不含个股详情（Issue #262）'
+    )
+
+    parser.add_argument(
         '--workers',
         type=int,
         default=None,
@@ -219,6 +225,10 @@ def run_full_analysis(
         # 命令行参数 --single-notify 覆盖配置（#55）
         if getattr(args, 'single_notify', False):
             config.single_stock_notify = True
+
+        # 命令行参数 --summary-only 覆盖配置（#262）
+        if getattr(args, 'summary_only', False):
+            config.report_summary_only = True
 
         # 创建调度器
         save_context_snapshot = None
