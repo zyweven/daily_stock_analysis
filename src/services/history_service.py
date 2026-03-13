@@ -144,7 +144,10 @@ class HistoryService:
             
             # 计算情绪标签
             sentiment_label = self._get_sentiment_label(record.sentiment_score or 50)
-            
+
+            # 尝试从 raw_result 提取原始狙击点字符串（优先展示）
+            raw_sniper_points = self._extract_raw_sniper_points(raw_result)
+
             return {
                 "query_id": record.query_id,
                 "stock_code": record.code,
@@ -156,10 +159,10 @@ class HistoryService:
                 "trend_prediction": record.trend_prediction,
                 "sentiment_score": record.sentiment_score,
                 "sentiment_label": sentiment_label,
-                "ideal_buy": str(record.ideal_buy) if record.ideal_buy else None,
-                "secondary_buy": str(record.secondary_buy) if record.secondary_buy else None,
-                "stop_loss": str(record.stop_loss) if record.stop_loss else None,
-                "take_profit": str(record.take_profit) if record.take_profit else None,
+                "ideal_buy": raw_sniper_points.get("ideal_buy") or (str(record.ideal_buy) if record.ideal_buy else None),
+                "secondary_buy": raw_sniper_points.get("secondary_buy") or (str(record.secondary_buy) if record.secondary_buy else None),
+                "stop_loss": raw_sniper_points.get("stop_loss") or (str(record.stop_loss) if record.stop_loss else None),
+                "take_profit": raw_sniper_points.get("take_profit") or (str(record.take_profit) if record.take_profit else None),
                 "news_content": record.news_content,
                 "raw_result": raw_result,
                 "context_snapshot": context_snapshot,
@@ -169,6 +172,40 @@ class HistoryService:
         except Exception as e:
             logger.error(f"查询历史详情失败: {e}", exc_info=True)
             return None
+
+    @staticmethod
+    def _extract_raw_sniper_points(raw_result: Any) -> Dict[str, Optional[str]]:
+        """
+        从 raw_result 中提取原始狙击点字符串（优先展示用）。
+
+        数据路径: raw_result.dashboard.battle_plan.sniper_points
+        返回: {"ideal_buy": str, "secondary_buy": str, "stop_loss": str, "take_profit": str}
+        """
+        result: Dict[str, Optional[str]] = {
+            "ideal_buy": None,
+            "secondary_buy": None,
+            "stop_loss": None,
+            "take_profit": None,
+        }
+
+        if not isinstance(raw_result, dict):
+            return result
+
+        # 尝试 dashboard.battle_plan.sniper_points 路径
+        dashboard = raw_result.get("dashboard")
+        if isinstance(dashboard, dict):
+            battle_plan = dashboard.get("battle_plan")
+            if isinstance(battle_plan, dict):
+                sniper_points = battle_plan.get("sniper_points")
+                if isinstance(sniper_points, dict):
+                    for key in result.keys():
+                        value = sniper_points.get(key)
+                        if value is not None:
+                            text = str(value).strip()
+                            if text and text not in ("-", "—", "N/A"):
+                                result[key] = text
+
+        return result
 
     def get_news_intel(self, query_id: str, limit: int = 20) -> List[Dict[str, str]]:
         """
