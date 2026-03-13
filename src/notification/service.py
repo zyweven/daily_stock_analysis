@@ -642,6 +642,14 @@ class NotificationService:
                 "",
             ])
 
+        # 如果仅推送摘要，直接结束并返回
+        if getattr(self, '_report_summary_only', False):
+            report_lines.extend([
+                "",
+                f"*报告生成时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*",
+            ])
+            return "\n".join(report_lines)
+
         # 逐个股票的决策仪表盘
         for result in sorted_results:
             signal_text, signal_emoji, signal_tag = self._get_signal_level(result)
