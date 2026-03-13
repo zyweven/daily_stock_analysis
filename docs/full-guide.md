@@ -219,6 +219,7 @@ daily_stock_analysis/
 | `SCHEDULE_ENABLED` | 启用定时任务 | `false` |
 | `SCHEDULE_TIME` | 定时执行时间 | `18:00` |
 | `LOG_DIR` | 日志目录 | `./logs` |
+| `ENABLE_CHIP_DISTRIBUTION` | 启用筹码分布分析（接口可能不稳定，GitHub Actions 默认关闭，需在 Repository Variables 设为 `true` 方可启用） | `true` |
 
 ---
 
