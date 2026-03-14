@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Notes (2026-03-14)
+- 🔄 **分支同步上游** — main 分支重置为 upstream/main，获取最新 multi-agent 架构和所有新功能
+- 📦 **用户功能存档** — 原 main 分支（用户开发的自定义功能：Agent/Chat/Expert Panel/Portfolio 等）存档为 `archive/user-features-20260314`
+- ⚙️ **配置迁移** — `EXTRA_AI_MODELS` 格式废弃，改用 `LLM_CHANNELS` 多渠道配置
+- 📝 **详细记录** — 见 Peridot 日志 #9（2026-03-14）
+
 ### Added
 - 🗑️ **History batch deletion** — Web UI now supports multi-selection and batch deletion of analysis history; added `POST /api/v1/history/batch-delete` endpoint and `ConfirmDialog` component.
 - 🔐 **Auth settings API** — new `POST /api/v1/auth/settings` endpoint to enable or disable Web authentication at runtime and set the initial admin password when needed
