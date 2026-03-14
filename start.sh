@@ -44,4 +44,4 @@ echo "   按 Ctrl+C 停止"
 echo ""
 
 # 启动 Web UI
-python main.py --webui
+exec .venv/bin/python main.py --webui
